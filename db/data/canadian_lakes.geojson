@@ -1,0 +1,26 @@
+{
+  "type": "FeatureCollection",
+  "name": "canadian_lakes_demo",
+  "features": [
+    {"type": "Feature", "properties": {"name": "Lac Saint-Jean", "province": "Québec", "description": "Vaste plan d’eau intérieur : doré, perchaude, ouananiche et brochet selon les secteurs."}, "geometry": {"type": "Point", "coordinates": [-72.25, 48.55]}},
+    {"type": "Feature", "properties": {"name": "Lac Mistassini", "province": "Québec", "description": "Plus grand lac naturel du Québec : eaux froides, touladi, brochet et doré."}, "geometry": {"type": "Point", "coordinates": [-73.88, 50.42]}},
+    {"type": "Feature", "properties": {"name": "Lac Memphrémagog", "province": "Québec", "description": "Lac long et profond entre Sutton et Newport : truite, achigan et brochet."}, "geometry": {"type": "Point", "coordinates": [-72.23, 45.08]}},
+    {"type": "Feature", "properties": {"name": "Lac Champlain", "province": "Québec / USA", "description": "Grande lacune frontalière : achigan, brochet, doré et perchaude très recherchés."}, "geometry": {"type": "Point", "coordinates": [-73.22, 45.05]}},
+    {"type": "Feature", "properties": {"name": "Great Slave Lake", "province": "Territoires du Nord-Ouest", "description": "Deuxième plus grand lac entièrement au Canada : truite grise, brochet et doré profond."}, "geometry": {"type": "Point", "coordinates": [-114.35, 61.55]}},
+    {"type": "Feature", "properties": {"name": "Lake Ontario", "province": "Ontario", "description": "Grande lacune : saumon chinook, truite arc-en-ciel, achigan, doré et brochet côtier."}, "geometry": {"type": "Point", "coordinates": [-77.90, 43.70]}},
+    {"type": "Feature", "properties": {"name": "Lac Supérieur", "province": "Ontario", "description": "Partie canadienne : truite de lac, brochet et perchaude sur structures rocheuses."}, "geometry": {"type": "Point", "coordinates": [-87.00, 48.50]}},
+    {"type": "Feature", "properties": {"name": "Baie Georgienne", "province": "Ontario", "description": "Échancrure immense du Huron : brochet, doré, perchaude et truite grise."}, "geometry": {"type": "Point", "coordinates": [-80.75, 45.00]}},
+    {"type": "Feature", "properties": {"name": "Lac Simcoe", "province": "Ontario", "description": "Lac populaire au sud de l’Ontario : perchaude, brochet et doré jaune."}, "geometry": {"type": "Point", "coordinates": [-79.35, 44.42]}},
+    {"type": "Feature", "properties": {"name": "Lac Érié", "province": "Ontario", "description": "Lac le plus au sud des Grands Lacs : doré, brochet, perchaude et achigan."}, "geometry": {"type": "Point", "coordinates": [-81.20, 42.20]}},
+    {"type": "Feature", "properties": {"name": "Lac Huron", "province": "Ontario", "description": "Côte nord et Manitoulin : truite grise, brochet et doré sur cassures."}, "geometry": {"type": "Point", "coordinates": [-82.00, 44.80]}},
+    {"type": "Feature", "properties": {"name": "Lac Nipigon", "province": "Ontario", "description": "Bassin froid au nord du Supérieur : brochet, truite grise et doré."}, "geometry": {"type": "Point", "coordinates": [-88.25, 49.80]}},
+    {"type": "Feature", "properties": {"name": "Lac des Bois", "province": "Ontario / Manitoba", "description": "Archipel à la frontière : doré, brochet et perchaude dans les passes."}, "geometry": {"type": "Point", "coordinates": [-95.15, 49.65]}},
+    {"type": "Feature", "properties": {"name": "Lac Winnipeg", "province": "Manitoba", "description": "Grand lac des Prairies : doré, brochet et perchaude en eaux turbides."}, "geometry": {"type": "Point", "coordinates": [-97.50, 52.50]}},
+    {"type": "Feature", "properties": {"name": "Lac Athabasca", "province": "Alberta / Saskatchewan", "description": "Grand lac boréal : brochet, truite grise et doré sur talus."}, "geometry": {"type": "Point", "coordinates": [-110.00, 58.50]}},
+    {"type": "Feature", "properties": {"name": "Lac Okanagan", "province": "Colombie-Britannique", "description": "Vallée chaude : achigan, truite arc-en-ciel et kokanee (saumon landlocked)."}, "geometry": {"type": "Point", "coordinates": [-119.44, 50.05]}},
+    {"type": "Feature", "properties": {"name": "Bras d’Or", "province": "Nouvelle-Écosse", "description": "Bras de mer intérieur : brochet, perchaude et pêche saumâtre variée."}, "geometry": {"type": "Point", "coordinates": [-60.75, 46.20]}},
+    {"type": "Feature", "properties": {"name": "Lac des Deux Montagnes", "province": "Québec", "description": "Confluence des Outaouais et du Saint-Laurent : brochet, doré et perchaude."}, "geometry": {"type": "Point", "coordinates": [-73.98, 45.52]}},
+    {"type": "Feature", "properties": {"name": "Lac Taureau", "province": "Québec", "description": "Réserve faunique au nord de Montréal : brochet, doré et perchaude."}, "geometry": {"type": "Point", "coordinates": [-73.45, 46.72]}},
+    {"type": "Feature", "properties": {"name": "Lac Kénogami", "province": "Québec", "description": "Bassin du Saguenay : doré, brochet et salmonidés en aval des rivières."}, "geometry": {"type": "Point", "coordinates": [-71.32, 48.32]}}
+  ]
+}

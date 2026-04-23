@@ -1,0 +1,101 @@
+<% content_for :title, "Carte des lacs — Canada" %>
+<% content_for :head do %>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<% end %>
+
+<div
+  class="lakes-map-page"
+  data-controller="map"
+  data-map-geocoding-url-value="<%= geocoding_search_path %>"
+  data-map-lakes-json-url-value="<%= lakes_path(format: :json) %>"
+  data-map-chat-url-format-value="<%= lake_chat_new_path_template %>"
+>
+  <header class="lakes-map-page__toolbar shadow-sm">
+    <div class="container-fluid py-2 py-md-3">
+      <form class="row g-2 align-items-end" data-action="submit->map#searchAddress">
+        <div class="col-12 col-md-5 col-lg-4">
+          <label class="form-label small text-muted mb-1">Ville ou lieu (Canada)</label>
+          <input
+            type="search"
+            class="form-control"
+            placeholder="Ex. Montréal, Québec, Saguenay, Lac-Saint-Jean…"
+            autocomplete="off"
+            data-map-target="searchInput"
+          />
+        </div>
+        <div class="col-6 col-md-2 col-lg-2">
+          <label class="form-label small text-muted mb-1">Rayon</label>
+          <select class="form-select" data-map-target="radiusSelect" data-action="change->map#radiusChanged">
+            <% [25, 50, 75, 100, 150].each do |km| %>
+              <option value="<%= km %>" <%= "selected" if km == 75 %>><%= km %> km</option>
+            <% end %>
+          </select>
+        </div>
+        <div class="col-6 col-md-5 col-lg-4 d-flex flex-wrap gap-2 align-items-end">
+          <button type="submit" class="btn btn-primary flex-grow-1">Rechercher</button>
+          <button type="button" class="btn btn-outline-secondary flex-grow-1" data-action="click->map#useMyLocation">Ma position</button>
+          <button type="button" class="btn btn-outline-dark flex-grow-1" data-action="click->map#clearSearch">Réinitialiser</button>
+        </div>
+      </form>
+      <div class="small text-danger mt-2 d-none" data-map-target="errorBox"></div>
+    </div>
+  </header>
+
+  <div class="lakes-map-page__layout">
+    <section class="lakes-map-page__map" aria-label="Carte interactive">
+      <div class="lakes-map-page__map-inner" data-map-target="mapContainer"></div>
+    </section>
+
+    <aside class="lakes-map-page__panel">
+      <div class="card border-0 shadow-sm h-100 lakes-map-page__panel-card">
+        <div class="card-body d-flex flex-column gap-3 min-h-0">
+          <section class="lake-results flex-shrink-0">
+            <div class="d-flex justify-content-between align-items-baseline mb-2">
+              <h2 class="h6 text-uppercase text-muted mb-0">Lacs dans la zone</h2>
+              <span class="badge text-bg-primary rounded-pill" data-map-target="resultsCount">0</span>
+            </div>
+            <p class="small text-muted d-none mb-2" data-map-target="resultsEmpty">Aucun lac dans ce rayon — élargissez la distance ou déplacez la recherche.</p>
+            <ul class="list-group list-group-flush border rounded lake-results__scroll" data-map-target="resultsList"></ul>
+          </section>
+
+          <hr class="my-0 flex-shrink-0" />
+
+          <div class="flex-grow-1 d-flex flex-column min-h-0">
+            <div data-map-target="emptyState" class="text-muted small lakes-map-page__fade">
+              <p class="mb-2 fw-semibold text-body">Détails du lac</p>
+              <p class="mb-0">Recherchez une ville ou utilisez votre position, puis sélectionnez un lac dans la liste ou sur la carte.</p>
+            </div>
+
+            <div data-map-target="details" class="d-none lakes-map-page__fade flex-grow-1 d-flex flex-column min-h-0">
+              <div class="d-flex justify-content-between align-items-start gap-2">
+                <h3 class="h5 mb-1" data-map-target="lakeName"></h3>
+              </div>
+              <p class="small text-muted mb-2" data-map-target="lakeLocation"></p>
+              <p class="mb-0" data-map-target="lakeDescription"></p>
+
+              <hr class="my-3" />
+
+              <section>
+                <h4 class="h6 text-uppercase text-muted mb-2">Poissons</h4>
+                <div class="d-flex flex-wrap gap-2" data-map-target="fishList"></div>
+              </section>
+
+              <section class="mt-3 flex-grow-1 d-flex flex-column min-h-0">
+                <h4 class="h6 text-uppercase text-muted mb-2">Leurres par espèce</h4>
+                <ul class="list-group list-group-flush border rounded small flex-grow-1 overflow-auto" data-map-target="luresList"></ul>
+              </section>
+
+              <div class="mt-3 pt-1 flex-shrink-0">
+                <% if Current.user %>
+                  <%= link_to "Ouvrir un chat sur ce lac", "#", class: "btn btn-outline-primary btn-sm w-100", data: { map_target: "chatLink" } %>
+                <% else %>
+                  <%= link_to "Connectez-vous pour chatter sur ce lac", new_session_path, class: "btn btn-outline-secondary btn-sm w-100" %>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>

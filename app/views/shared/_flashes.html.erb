@@ -1,0 +1,7 @@
+<% flash.each do |type, message| %>
+  <% next if message.blank? %>
+  <% css = type.to_sym == :notice ? "alert-success" : "alert-danger" %>
+  <div class="alert <%= css %> shadow-sm app-flash" role="alert">
+    <%= message %>
+  </div>
+<% end %>

@@ -1,0 +1,159 @@
+.lakes-map-page {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 56px);
+}
+
+.lakes-map-page__toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.lakes-map-page__layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
+  @media (min-width: 992px) {
+    flex-direction: row;
+    align-items: stretch;
+  }
+}
+
+.lakes-map-page__map {
+  flex: 1;
+  min-height: 42vh;
+  position: relative;
+
+  @media (min-width: 992px) {
+    min-height: calc(100vh - 200px);
+    flex: 1.2;
+  }
+}
+
+.lakes-map-page__map-inner {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+  overflow: hidden;
+
+  @media (min-width: 992px) {
+    border-radius: 0 0 0.5rem 0;
+  }
+}
+
+.lakes-map-page__panel {
+  flex: 1;
+  min-height: 0;
+  padding: 0.75rem;
+  max-height: none;
+
+  @media (min-width: 992px) {
+    flex: 0 0 420px;
+    max-width: 38vw;
+    max-height: calc(100vh - 200px);
+    overflow: auto;
+    padding: 1rem;
+  }
+}
+
+.lakes-map-page__panel-card {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.min-h-0 {
+  min-height: 0;
+}
+
+.lake-results__scroll {
+  max-height: 28vh;
+  overflow-y: auto;
+
+  @media (min-width: 992px) {
+    max-height: 32vh;
+  }
+}
+
+.lake-results__item {
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.lake-results__item:hover {
+  background-color: rgba(13, 110, 253, 0.06);
+}
+
+.lake-results__item--active {
+  background-color: rgba(25, 135, 84, 0.1);
+  border-left: 3px solid #198754 !important;
+}
+
+.leaflet-popup.lake-popup-wrap .leaflet-popup-content {
+  margin: 10px 12px;
+}
+
+.lake-popup .lake-popup__lure-list {
+  list-style: disc;
+  padding-left: 1.1rem;
+}
+
+.lake-popup .lake-popup__lure {
+  margin-bottom: 0.15rem;
+}
+
+.fish-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: #e7f1ff;
+  color: #0d47a1;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.lure-item {
+  border-left: 3px solid #0d6efd !important;
+}
+
+.lakes-map-page__fade {
+  animation: lakes-map-fade 0.35s ease-out;
+}
+
+@keyframes lakes-map-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat-show__messages {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.chat-show__bubble {
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.85rem;
+}
+
+.app-flash {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 2000;
+  min-width: 240px;
+  max-width: 360px;
+  width: calc(100vw - 2rem);
+  animation: lakes-map-fade 0.3s ease-out;
+}

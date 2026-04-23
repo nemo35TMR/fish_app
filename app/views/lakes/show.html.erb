@@ -1,0 +1,12 @@
+<% content_for :title, @lake.name %>
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0"><%= @lake.name %></h1>
+    <%= link_to "Retour à la carte", root_path, class: "btn btn-outline-primary btn-sm" %>
+  </div>
+  <p class="text-muted"><%= @lake.location %></p>
+  <p><%= @lake.description %></p>
+  <% if @lake.latitude.present? && @lake.longitude.present? %>
+    <p class="small text-muted">Coordonnées : <%= @lake.latitude %>, <%= @lake.longitude %></p>
+  <% end %>
+</div>
