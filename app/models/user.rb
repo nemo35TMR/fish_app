@@ -5,4 +5,5 @@ class User < ApplicationRecord
          :recoverable, :rememberable
 
   has_many :chats, dependent: :destroy
+  has_many :lakes, dependent: :destroy
 end

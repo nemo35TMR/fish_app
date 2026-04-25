@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 class ChatsController < ApplicationController
-  before_action :require_authentication
   before_action :set_lake, only: %i[new create]
   before_action :set_chat, only: [:show]
 
@@ -10,7 +9,7 @@ class ChatsController < ApplicationController
   end
 
   def create
-    @chat = Current.user.chats.build(chat_params.merge(lake: @lake))
+    @chat = current_user.chats.build(chat_params.merge(lake: @lake))
 
     if @chat.save
       redirect_to chat_path(@chat), notice: "Conversation créée."
@@ -31,7 +30,7 @@ class ChatsController < ApplicationController
   end
 
   def set_chat
-    @chat = Current.user.chats.find(params[:id])
+    @chat = current_user.chats.find(params[:id])
   end
 
   def chat_params

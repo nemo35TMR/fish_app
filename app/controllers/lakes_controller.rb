@@ -34,9 +34,21 @@ class LakesController < ApplicationController
   end
 
   def radius_search_triplet
-    lat = Float(params[:latitude]) rescue nil
-    lon = Float(params[:longitude]) rescue nil
-    km = Float(params[:radius_km]) rescue nil
+    lat = begin
+      Float(params[:latitude])
+    rescue StandardError
+      nil
+    end
+    lon = begin
+      Float(params[:longitude])
+    rescue StandardError
+      nil
+    end
+    km = begin
+      Float(params[:radius_km])
+    rescue StandardError
+      nil
+    end
     return nil unless lat && lon && km
     return nil unless lat.between?(-90, 90) && lon.between?(-180, 180)
     return nil unless km.between?(1, 500)
