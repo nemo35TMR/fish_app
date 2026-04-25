@@ -1,11 +1,13 @@
 <% content_for :title, "Carte des lacs — Canada" %>
 <% content_for :head do %>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
 <% end %>
 
 <div
   class="lakes-map-page"
   data-controller="map"
+  data-map-access-token-value="<%= mapbox_public_token %>"
   data-map-geocoding-url-value="<%= geocoding_search_path %>"
   data-map-lakes-json-url-value="<%= lakes_path(format: :json) %>"
   data-map-chat-url-format-value="<%= lake_chat_new_path_template %>"
@@ -21,7 +23,7 @@
             placeholder="Ex. Montréal, Québec, Saguenay, Lac-Saint-Jean…"
             autocomplete="off"
             data-map-target="searchInput"
-          />
+>
         </div>
         <div class="col-6 col-md-2 col-lg-2">
           <label class="form-label small text-muted mb-1">Rayon</label>
@@ -58,7 +60,7 @@
             <ul class="list-group list-group-flush border rounded lake-results__scroll" data-map-target="resultsList"></ul>
           </section>
 
-          <hr class="my-0 flex-shrink-0" />
+          <hr class="my-0 flex-shrink-0">
 
           <div class="flex-grow-1 d-flex flex-column min-h-0">
             <div data-map-target="emptyState" class="text-muted small lakes-map-page__fade">
@@ -73,7 +75,7 @@
               <p class="small text-muted mb-2" data-map-target="lakeLocation"></p>
               <p class="mb-0" data-map-target="lakeDescription"></p>
 
-              <hr class="my-3" />
+              <hr class="my-3">
 
               <section>
                 <h4 class="h6 text-uppercase text-muted mb-2">Poissons</h4>
@@ -89,7 +91,7 @@
                 <% if Current.user %>
                   <%= link_to "Ouvrir un chat sur ce lac", "#", class: "btn btn-outline-primary btn-sm w-100", data: { map_target: "chatLink" } %>
                 <% else %>
-                  <%= link_to "Connectez-vous pour chatter sur ce lac", new_session_path, class: "btn btn-outline-secondary btn-sm w-100" %>
+                  <%= link_to "Connectez-vous pour chatter sur ce lac", new_user_session_path, class: "btn btn-outline-secondary btn-sm w-100" %>
                 <% end %>
               </div>
             </div>

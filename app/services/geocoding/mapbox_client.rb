@@ -12,7 +12,7 @@ module Geocoding
         q = query.to_s.strip
         return [] if q.blank?
 
-        token = ENV["MAPBOX_ACCESS_TOKEN"].to_s.strip
+        token = mapbox_token
         return [] if token.blank?
 
         encoded = CGI.escape(q)
@@ -51,6 +51,11 @@ module Geocoding
         end
       rescue JSON::ParserError, Net::OpenTimeout, Net::ReadTimeout, SocketError
         []
+      end
+
+      def mapbox_token
+        ENV["MAPBOX_ACCESS_TOKEN"].presence ||
+          Rails.application.config.try(:mapbox_public_token).to_s.strip
       end
     end
   end

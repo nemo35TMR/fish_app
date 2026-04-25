@@ -5,4 +5,9 @@ module ApplicationHelper
   def lake_chat_new_path_template
     "/lakes/%{id}/chats/new"
   end
+
+  # Jeton public Mapbox pour la carte GL (pk.*).
+  def mapbox_public_token
+    Rails.application.config.mapbox_public_token.to_s
+  end
 end

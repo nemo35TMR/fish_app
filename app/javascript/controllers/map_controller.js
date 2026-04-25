@@ -1,14 +1,41 @@
 import { Controller } from "@hotwired/stimulus"
-import {
-  map as createMap,
-  tileLayer,
-  circleMarker,
-  circle,
-  latLngBounds
-} from "leaflet"
+
+/** Polygone approximatif (cercle géodésique) pour source GeoJSON Mapbox. */
+function circleFeatureCollection(centerLng, centerLat, radiusKm, steps = 72) {
+  const coordinates = []
+  const distKm = radiusKm / 6371
+  for (let i = 0; i <= steps; i += 1) {
+    const brng = ((i * 360) / steps) * (Math.PI / 180)
+    const lat1 = (centerLat * Math.PI) / 180
+    const lon1 = (centerLng * Math.PI) / 180
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distKm) + Math.cos(lat1) * Math.sin(distKm) * Math.cos(brng))
+    let lon2 =
+      lon1 +
+      Math.atan2(
+        Math.sin(brng) * Math.sin(distKm) * Math.cos(lat1),
+        Math.cos(distKm) - Math.sin(lat1) * Math.sin(lat2)
+      )
+    lon2 = ((((lon2 + Math.PI) % (2 * Math.PI)) + Math.PI) % (2 * Math.PI)) - Math.PI
+    coordinates.push([(lon2 * 180) / Math.PI, (lat2 * 180) / Math.PI])
+  }
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "Polygon",
+          coordinates: [coordinates]
+        }
+      }
+    ]
+  }
+}
 
 export default class extends Controller {
   static values = {
+    accessToken: String,
     geocodingUrl: { type: String, default: "/geocoding/search" },
     lakesJsonUrl: { type: String, default: "/lakes.json" },
     chatUrlFormat: { type: String, default: "/lakes/%{id}/chats/new" }
@@ -35,18 +62,28 @@ export default class extends Controller {
   connect() {
     this.lakes = []
     this.markersById = new Map()
+    this._markerList = []
     this.selectedId = null
     this.searchCenter = null
-    this.searchCircle = null
-    this._markerGroup = []
+    this._popup = null
 
     this._onBeforeCache = () => this.teardownMapForTurbo()
     document.addEventListener("turbo:before-cache", this._onBeforeCache)
 
     this.prepareMapContainer()
+
+    if (typeof mapboxgl === "undefined") {
+      this.showError("Mapbox GL n’est pas chargé. Vérifiez les balises script dans la page carte.")
+      return
+    }
+
+    if (!this.accessTokenValue?.trim()) {
+      this.showError("Clé d’accès Mapbox manquante.")
+      return
+    }
+
     this.initMap()
     this.resetDetails()
-    this.loadLakesFromServer()
   }
 
   disconnect() {
@@ -54,16 +91,16 @@ export default class extends Controller {
     this.teardownMapForTurbo()
   }
 
-  /** Turbo met en cache la page : il faut détruire Leaflet sinon la carte réapparaît cassée (tuiles / marqueurs). */
   teardownMapForTurbo() {
     this.clearMarkers()
-    if (this.searchCircle && this._map) {
+    this.removeSearchRadiusLayers()
+    if (this._popup) {
       try {
-        this._map.removeLayer(this.searchCircle)
+        this._popup.remove()
       } catch {
         /* noop */
       }
-      this.searchCircle = null
+      this._popup = null
     }
     if (this._map) {
       try {
@@ -83,31 +120,41 @@ export default class extends Controller {
     }
   }
 
-  scheduleInvalidateSize() {
+  scheduleMapResize() {
     if (!this._map) return
     requestAnimationFrame(() => {
-      this._map.invalidateSize(true)
-      window.setTimeout(() => this._map?.invalidateSize(true), 150)
+      this._map.resize()
+      window.setTimeout(() => this._map?.resize(), 200)
     })
   }
 
   initMap() {
-    // Centre approximatif du Canada (prairies / bouclier canadien) avant chargement des lacs
-    const start = [61.3, -98.5]
+    mapboxgl.accessToken = this.accessTokenValue.trim()
 
-    this._map = createMap(this.mapContainerTarget, {
-      center: start,
-      zoom: 4,
-      scrollWheelZoom: true,
-      minZoom: 3
+    this._map = new mapboxgl.Map({
+      container: this.mapContainerTarget,
+      style: "mapbox://styles/mapbox/outdoors-v12",
+      center: [-98.5, 61.3],
+      zoom: 3.8,
+      minZoom: 2,
+      maxPitch: 52,
+      attributionControl: true
     })
 
-    tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    }).addTo(this._map)
+    this._map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right")
+    this._map.addControl(new mapboxgl.ScaleControl({ maxWidth: 120 }), "bottom-left")
 
-    this.scheduleInvalidateSize()
+    this._popup = new mapboxgl.Popup({
+      closeButton: true,
+      closeOnClick: true,
+      maxWidth: "340px",
+      className: "lake-mapbox-popup"
+    })
+
+    this._map.once("load", () => {
+      this.scheduleMapResize()
+      this.loadLakesFromServer()
+    })
   }
 
   lakesUrl() {
@@ -121,7 +168,9 @@ export default class extends Controller {
   }
 
   async loadLakesFromServer() {
+    if (!this._map) return
     this.clearError()
+
     try {
       const response = await fetch(this.lakesUrl(), {
         headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" },
@@ -139,7 +188,7 @@ export default class extends Controller {
       try {
         parsed = JSON.parse(raw)
       } catch {
-        this.showError("Réponse invalide du serveur (attendu du JSON). Lancez bin/rails db:seed si la base est vide.")
+        this.showError("Réponse invalide du serveur (JSON attendu). Lancez bin/rails db:seed si besoin.")
         return
       }
       if (!Array.isArray(parsed)) {
@@ -158,15 +207,61 @@ export default class extends Controller {
         this.resetDetails()
       }
 
-      if (this.searchCenter && this.searchCircle) {
+      if (this.searchCenter) {
+        this.drawSearchRadiusLayer()
         this.flyToSearchArea()
       } else {
+        this.removeSearchRadiusLayers()
         this.fitInitialBounds()
       }
 
-      this.scheduleInvalidateSize()
+      this.scheduleMapResize()
     } catch {
       this.showError("Erreur réseau lors du chargement des lacs.")
+    }
+  }
+
+  removeSearchRadiusLayers() {
+    if (!this._map?.isStyleLoaded()) return
+    ;["search-radius-line", "search-radius-fill"].forEach((id) => {
+      if (this._map.getLayer(id)) this._map.removeLayer(id)
+    })
+    if (this._map.getSource("search-radius")) this._map.removeSource("search-radius")
+    this._searchCircleBounds = null
+  }
+
+  drawSearchRadiusLayer() {
+    if (!this._map?.isStyleLoaded() || !this.searchCenter) return
+
+    const km = parseFloat(this.radiusSelectTarget.value, 10)
+    const geo = circleFeatureCollection(this.searchCenter.lon, this.searchCenter.lat, km)
+    const ring = geo.features[0].geometry.coordinates[0]
+    const b = new mapboxgl.LngLatBounds()
+    ring.forEach((c) => b.extend(c))
+    this._searchCircleBounds = b
+
+    if (this._map.getSource("search-radius")) {
+      this._map.getSource("search-radius").setData(geo)
+    } else {
+      this._map.addSource("search-radius", { type: "geojson", data: geo })
+      this._map.addLayer({
+        id: "search-radius-fill",
+        type: "fill",
+        source: "search-radius",
+        paint: {
+          "fill-color": "#2563eb",
+          "fill-opacity": 0.12
+        }
+      })
+      this._map.addLayer({
+        id: "search-radius-line",
+        type: "line",
+        source: "search-radius",
+        paint: {
+          "line-color": "#2563eb",
+          "line-width": 2
+        }
+      })
     }
   }
 
@@ -174,28 +269,40 @@ export default class extends Controller {
     this.clearMarkers()
 
     this.lakes.forEach((lake) => {
-      const latlng = [lake.latitude, lake.longitude]
-      const marker = circleMarker(latlng, {
-        radius: 11,
-        weight: 2,
-        color: "#0d6efd",
-        fillColor: "#0d6efd",
-        fillOpacity: 0.9
-      })
-      marker.bindPopup(this.popupHtml(lake), { maxWidth: 300, className: "lake-popup-wrap" })
-      marker.addTo(this._map)
-      marker.on("click", (e) => {
-        e.originalEvent?.stopPropagation?.()
+      const lng = Number(lake.longitude)
+      const lat = Number(lake.latitude)
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) return
+
+      const el = document.createElement("button")
+      el.type = "button"
+      el.className = "mapbox-lake-marker"
+      el.dataset.lakeId = String(lake.id)
+      el.setAttribute("aria-label", lake.name)
+      el.title = lake.name
+
+      const marker = new mapboxgl.Marker({ element: el, anchor: "center" }).setLngLat([lng, lat]).addTo(this._map)
+
+      el.addEventListener("click", (e) => {
+        e.preventDefault()
+        e.stopPropagation()
         this.selectLake(lake.id)
+        this._popup.setLngLat([lng, lat]).setHTML(this.popupHtml(lake)).addTo(this._map)
       })
-      this.markersById.set(lake.id, { lake, marker })
-      this._markerGroup.push(marker)
+
+      this.markersById.set(lake.id, { lake, marker, element: el })
+      this._markerList.push(marker)
     })
   }
 
   clearMarkers() {
-    this._markerGroup?.forEach((m) => m.remove())
-    this._markerGroup = []
+    this._markerList.forEach((m) => {
+      try {
+        m.remove()
+      } catch {
+        /* noop */
+      }
+    })
+    this._markerList = []
     this.markersById.clear()
   }
 
@@ -207,12 +314,18 @@ export default class extends Controller {
       .filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && a >= -90 && a <= 90 && b >= -180 && b <= 180)
 
     if (pts.length === 0) {
-      this._map.setView([61.3, -98.5], 4, { animate: false })
+      this._map.easeTo({ center: [-98.5, 61.3], zoom: 3.8, duration: 0 })
       return
     }
 
-    const bounds = latLngBounds(pts)
-    this._map.fitBounds(bounds, { padding: [48, 48], maxZoom: 5, animate: true })
+    const bounds = new mapboxgl.LngLatBounds()
+    pts.forEach(([la, lo]) => bounds.extend([lo, la]))
+    this._map.fitBounds(bounds, { padding: 56, maxZoom: 5, duration: 900 })
+  }
+
+  flyToSearchArea() {
+    if (!this._map || !this._searchCircleBounds) return
+    this._map.fitBounds(this._searchCircleBounds, { padding: 64, maxZoom: 9, duration: 1000 })
   }
 
   renderResultsList() {
@@ -241,11 +354,18 @@ export default class extends Controller {
         <div class="fw-semibold">${this.escapeHtml(lake.name)}</div>
         <div class="small text-muted text-truncate">${this.escapeHtml(lake.location_label || "")}</div>
       `
-      li.addEventListener("click", () => this.selectLake(lake.id))
+      li.addEventListener("click", () => {
+        this.selectLake(lake.id)
+        const lng = Number(lake.longitude)
+        const lat = Number(lake.latitude)
+        if (Number.isFinite(lng) && Number.isFinite(lat)) {
+          this._popup.setLngLat([lng, lat]).setHTML(this.popupHtml(lake)).addTo(this._map)
+        }
+      })
       li.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault()
-          this.selectLake(lake.id)
+          li.click()
         }
       })
       this.resultsListTarget.appendChild(li)
@@ -303,65 +423,34 @@ export default class extends Controller {
 
   radiusChanged() {
     if (!this.searchCenter) return
-    this.drawSearchCircle()
     this.loadLakesFromServer()
   }
 
   applySearchCenter(lat, lon) {
     this.searchCenter = { lat: Number(lat), lon: Number(lon) }
-    this.drawSearchCircle()
     this.loadLakesFromServer()
   }
 
-  flyToSearchArea() {
-    if (!this._map || !this.searchCircle) return
-    this._map.flyToBounds(this.searchCircle.getBounds(), {
-      padding: [52, 52],
-      maxZoom: 11,
-      duration: 1.05
-    })
-  }
-
-  drawSearchCircle() {
-    if (!this._map || !this.searchCenter) return
-
-    const km = parseFloat(this.radiusSelectTarget.value, 10)
-    if (this.searchCircle) {
-      this._map.removeLayer(this.searchCircle)
-      this.searchCircle = null
-    }
-
-    this.searchCircle = circle([this.searchCenter.lat, this.searchCenter.lon], {
-      radius: km * 1000,
-      color: "#0d6efd",
-      weight: 2,
-      fillColor: "#0d6efd",
-      fillOpacity: 0.06
-    }).addTo(this._map)
-  }
-
   updateMarkerHighlighting() {
-    this.markersById.forEach(({ lake, marker }) => {
+    this.markersById.forEach(({ element, lake }) => {
       const selected = lake.id === this.selectedId
-      marker.setStyle({
-        opacity: 1,
-        fillOpacity: selected ? 0.95 : 0.85,
-        color: selected ? "#198754" : "#0d6efd",
-        fillColor: selected ? "#198754" : "#0d6efd",
-        weight: selected ? 3 : 2
-      })
+      element.classList.toggle("mapbox-lake-marker--selected", selected)
     })
   }
 
   selectLake(id) {
     const lake = this.lakes.find((l) => l.id === id) || this.markersById.get(id)?.lake
-    if (!lake) return
+    if (!lake || !this._map) return
 
     this.selectedId = id
     this.updateMarkerHighlighting()
     this.updateResultsListSelection()
 
-    this._map.panTo([lake.latitude, lake.longitude])
+    const lng = Number(lake.longitude)
+    const lat = Number(lake.latitude)
+    if (Number.isFinite(lng) && Number.isFinite(lat)) {
+      this._map.easeTo({ center: [lng, lat], zoom: Math.max(this._map.getZoom(), 8), duration: 650 })
+    }
 
     this.emptyStateTarget.classList.add("d-none")
     this.detailsTarget.classList.remove("d-none")
@@ -371,7 +460,7 @@ export default class extends Controller {
     this.lakeLocationTarget.textContent = lake.location_label || "—"
 
     this.fishListTarget.innerHTML = ""
-    lake.fish_species.forEach((fs) => {
+    ;(lake.fish_species || []).forEach((fs) => {
       const pill = document.createElement("span")
       pill.className = "fish-pill"
       pill.textContent = fs.name
@@ -414,16 +503,15 @@ export default class extends Controller {
     this.detailsTarget.classList.add("d-none")
     this.updateMarkerHighlighting()
     this.updateResultsListSelection()
+    if (this._popup) this._popup.remove()
   }
 
   clearSearch() {
     this.searchCenter = null
-    if (this.searchCircle && this._map) {
-      this._map.removeLayer(this.searchCircle)
-      this.searchCircle = null
-    }
+    this.removeSearchRadiusLayers()
     this.searchInputTarget.value = ""
     this.clearError()
+    if (this._popup) this._popup.remove()
     this.loadLakesFromServer()
   }
 
@@ -449,19 +537,29 @@ export default class extends Controller {
   }
 
   popupHtml(lake) {
-    const loc = lake.location_label ? `<p class="small text-muted mb-2">${this.escapeHtml(lake.location_label)}</p>` : ""
+    const loc = lake.location_label
+      ? `<p class="small text-muted mb-2">${this.escapeHtml(lake.location_label)}</p>`
+      : ""
+    const desc = lake.description
+      ? `<p class="small mb-2">${this.escapeHtml(lake.description)}</p>`
+      : ""
     const species = lake.fish_species || []
-    const blocks = species
+    const fishBlock =
+      species.length > 0
+        ? `<div class="mb-2"><div class="fw-semibold small text-uppercase text-muted mb-1">Espèces</div><ul class="mb-0 ps-3">${species
+            .map((fs) => `<li>${this.escapeHtml(fs.name)}</li>`)
+            .join("")}</ul></div>`
+        : ""
+    const lureBlocks = species
       .map((fs) => {
         const items = (fs.lures || []).map(
           (l) =>
-            `<li class="lake-popup__lure"><span class="fw-semibold">${this.escapeHtml(l.name)}</span> — <span class="text-muted">${this.escapeHtml(l.description || "")}</span></li>`
+            `<li><span class="fw-semibold">${this.escapeHtml(l.name)}</span> <span class="text-muted">${this.escapeHtml(l.description || "")}</span></li>`
         )
         if (items.length === 0) return ""
-        const lures = items.join("")
-        return `<section class="lake-popup__species mb-2"><div class="fw-semibold small mb-1">${this.escapeHtml(fs.name)}</div><ul class="lake-popup__lure-list mb-0">${lures}</ul></section>`
+        return `<div class="mb-2"><div class="fw-semibold small text-uppercase text-muted mb-1">${this.escapeHtml(fs.name)} — leurres</div><ul class="mb-0 ps-3">${items.join("")}</ul></div>`
       })
       .join("")
-    return `<div class="lake-popup"><h3 class="h6 mb-1">${this.escapeHtml(lake.name)}</h3>${loc}<div class="small">${blocks || "<p class=\"text-muted mb-0\">Aucune donnée.</p>"}</div></div>`
+    return `<div class="lake-popup-mapbox"><h3 class="h6 mb-1">${this.escapeHtml(lake.name)}</h3>${loc}${desc}${fishBlock}${lureBlocks || '<p class="text-muted small mb-0">Pas de détail supplémentaire.</p>'}</div>`
   }
 }

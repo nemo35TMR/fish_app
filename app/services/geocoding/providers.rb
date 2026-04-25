@@ -5,7 +5,7 @@ module Geocoding
   module Providers
     class << self
       def search(query)
-        if ENV["MAPBOX_ACCESS_TOKEN"].to_s.strip.present?
+        if MapboxClient.mapbox_token.present?
           MapboxClient.search(query)
         else
           NominatimClient.search(query)
