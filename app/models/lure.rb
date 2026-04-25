@@ -5,4 +5,5 @@ class Lure < ApplicationRecord
   has_many :fish_species, through: :fish_lures
 
   validates :name, presence: true
+  validates :role, inclusion: { in: ["user", "assistant"] }
 end
