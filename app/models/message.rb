@@ -5,4 +5,8 @@ class Message < ApplicationRecord
 
   validates :content, presence: true
   validates :role, presence: true
+  before_validation :set_default_title
+  def set_default_title
+  self.title ||= "Chat about #{lake.name}"
+end
 end
