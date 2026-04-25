@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 class MessagesController < ApplicationController
-  before_action :require_authentication
   before_action :set_chat
 
   def create
@@ -65,7 +64,7 @@ class MessagesController < ApplicationController
   private
 
   def set_chat
-    @chat = Current.user.chats.find(params[:chat_id])
+    @chat = current_user.chats.find(params[:chat_id])
   end
 
   def message_params

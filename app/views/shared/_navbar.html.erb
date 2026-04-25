@@ -11,9 +11,9 @@
         <li class="nav-item">
           <%= link_to "Carte", root_path, class: "nav-link", data: { turbo: false } %>
         </li>
-        <% if Current.user %>
+        <% if user_signed_in? %>
           <li class="nav-item">
-            <span class="nav-link small text-muted"><%= Current.user.email %></span>
+            <span class="nav-link small text-muted"><%= current_user.email %></span>
           </li>
           <li class="nav-item">
             <%= button_to "Déconnexion", destroy_user_session_path, method: :delete, class: "btn btn-outline-secondary btn-sm" %>
