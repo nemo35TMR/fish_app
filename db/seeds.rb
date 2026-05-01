@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
-# Données de démonstration : lacs canadiens réels + espèces + leurres (associations explicites).
+# Seed simple et idempotent :
+# - ne touche pas au schéma
+# - réutilise les lacs déjà présents
+# - ajoute espèces, leurres et associations manquantes
 # Relancer : bin/rails db:seed
 
 user = User.find_or_initialize_by(email: "pecheur@example.com")
@@ -10,86 +13,83 @@ if user.new_record?
   user.save!
 end
 
-ApplicationRecord.transaction do
-  Message.delete_all
-  Chat.delete_all
-  LakeFish.delete_all
-  FishLure.delete_all
-  Lake.delete_all
-  FishSpecies.delete_all
-  Lure.delete_all
+# Libellés en français : renomme les anciennes fiches encore en anglais (idempotent).
+legacy_fish_en_to_fr = {
+  "Northern Pike" => "Brochet",
+  "Walleye" => "Doré jaune",
+  "Brook Trout" => "Truite mouchetée",
+  "Lake Trout" => "Truite grise",
+  "Smallmouth Bass" => "Achigan à petite bouche"
+}.freeze
+
+legacy_fish_en_to_fr.each do |en, fr|
+  next unless (sp = FishSpecies.find_by(name: en))
+  next if FishSpecies.where.not(id: sp.id).exists?(name: fr)
+
+  sp.update!(name: fr)
 end
 
-geo_path = Rails.root.join("db/data/canadian_lakes.geojson")
-raise "GeoJSON manquant : #{geo_path}" unless File.exist?(geo_path)
-
-Lakes::GeojsonImporter.import!(geo_path)
-
-SPECIES = [
-  "Brochet (Northern Pike)",
-  "Doré / Walleye",
+fish_names = [
+  "Brochet",
+  "Doré jaune",
   "Truite mouchetée",
   "Truite grise",
-  "Achigan smallmouth",
-  "Perchaude"
-].index_with { |name| FishSpecies.create!(name: name) }.freeze
+  "Achigan à petite bouche"
+].freeze
 
-LURES = [
-  ["Spinnerbait", "Animation près des herbiers et obstacles pour brochet et maskinongé."],
-  ["Crankbait", "Prospection des talus et bordures pour doré et perchaude."],
-  ["Jerkbait", "Postes d’achigan et brochet sur cassures et quais."],
-  ["Soft plastic swimbait", "Linéaire et tombés : polyvalent carnassiers."],
-  ["Spoon", "Cuiller ondulée ou flutter : truites froides et doré suspendu."],
-  ["Topwater lure", "Surface matin/soir : achigan et brochet agressifs."],
-  ["Jig", "Tête plombée et leurre souple : doré, perchaude et profondeur."]
-].to_h { |(name, desc)| [name, Lure.create!(name: name, description: desc)] }.freeze
-
-# Plusieurs leurres recommandés par espèce (FishLure).
-FISH_LURE_NAMES = {
-  "Brochet (Northern Pike)" => %w[Spinnerbait Spoon Jerkbait Soft\ plastic\ swimbait Crankbait],
-  "Doré / Walleye" => %w[Jig Crankbait Soft\ plastic\ swimbait Spinnerbait Spoon],
-  "Truite mouchetée" => %w[Spoon Spinnerbait Jerkbait Jig],
-  "Truite grise" => %w[Spoon Jig Crankbait Jerkbait],
-  "Achigan smallmouth" => %w[Jerkbait Crankbait Soft\ plastic\ swimbait Topwater\ lure Jig],
-  "Perchaude" => %w[Jig Spoon Soft\ plastic\ swimbait Crankbait]
+lure_data = {
+  "Spinnerbait" => "Très bon pour pike et bass autour des herbiers.",
+  "Crankbait" => "Prospection rapide des bordures et cassures.",
+  "Jig" => "Polyvalent en profondeur, excellent pour walleye.",
+  "Spoon" => "Efficace sur truites et pike dans l’eau froide.",
+  "Jerkbait" => "Très efficace sur poissons actifs en mi-profondeur.",
+  "Soft Plastic" => "Souple et naturel, fonctionne presque partout."
 }.freeze
 
-FISH_LURE_NAMES.each do |species_name, lure_names|
-  sp = SPECIES[species_name]
+species_by_name = fish_names.index_with do |name|
+  FishSpecies.find_or_create_by!(name: name)
+end
+
+lures_by_name = lure_data.to_h do |name, description|
+  lure = Lure.find_or_initialize_by(name: name)
+  lure.description = description if lure.description.blank?
+  lure.save!
+  [name, lure]
+end
+
+fish_to_lures = {
+  "Brochet" => ["Spinnerbait", "Spoon", "Jerkbait", "Soft Plastic"],
+  "Doré jaune" => ["Jig", "Crankbait", "Soft Plastic", "Spoon"],
+  "Truite mouchetée" => ["Spoon", "Jerkbait", "Spinnerbait"],
+  "Truite grise" => ["Spoon", "Jig", "Crankbait"],
+  "Achigan à petite bouche" => ["Jerkbait", "Crankbait", "Soft Plastic", "Spinnerbait"]
+}.freeze
+
+fish_to_lures.each do |fish_name, lure_names|
+  species = species_by_name[fish_name]
   lure_names.each do |lure_name|
-    FishLure.create!(fish_species: sp, lure: LURES[lure_name])
+    FishLure.find_or_create_by!(fish_species: species, lure: lures_by_name[lure_name])
   end
 end
 
-# Espèces présentes par lac (LakeFish) — noms exacts comme dans le GeoJSON.
-LAKE_SPECIES_NAMES = {
-  "Lac Saint-Jean" => ["Doré / Walleye", "Truite grise", "Perchaude", "Brochet (Northern Pike)"],
-  "Lac Mistassini" => ["Brochet (Northern Pike)", "Doré / Walleye", "Truite grise", "Truite mouchetée"],
-  "Lac Memphrémagog" => ["Truite mouchetée", "Brochet (Northern Pike)", "Achigan smallmouth", "Perchaude", "Doré / Walleye"],
-  "Lac Champlain" => ["Achigan smallmouth", "Brochet (Northern Pike)", "Doré / Walleye", "Perchaude", "Truite mouchetée"],
-  "Great Slave Lake" => ["Truite grise", "Brochet (Northern Pike)", "Doré / Walleye", "Perchaude"],
-  "Lake Ontario" => ["Brochet (Northern Pike)", "Doré / Walleye", "Achigan smallmouth", "Truite grise", "Perchaude"],
-  "Lac Supérieur" => ["Truite grise", "Brochet (Northern Pike)", "Doré / Walleye", "Perchaude"],
-  "Baie Georgienne" => ["Brochet (Northern Pike)", "Doré / Walleye", "Perchaude", "Truite grise"],
-  "Lac Simcoe" => ["Perchaude", "Brochet (Northern Pike)", "Doré / Walleye", "Achigan smallmouth"],
-  "Lac Érié" => ["Perchaude", "Doré / Walleye", "Brochet (Northern Pike)", "Achigan smallmouth"],
-  "Lac Huron" => ["Truite grise", "Brochet (Northern Pike)", "Doré / Walleye", "Perchaude"],
-  "Lac Nipigon" => ["Truite grise", "Brochet (Northern Pike)", "Doré / Walleye"],
-  "Lac des Bois" => ["Brochet (Northern Pike)", "Doré / Walleye", "Achigan smallmouth", "Perchaude"],
-  "Lac Winnipeg" => ["Doré / Walleye", "Brochet (Northern Pike)", "Perchaude", "Truite grise"],
-  "Lac Athabasca" => ["Truite grise", "Brochet (Northern Pike)", "Doré / Walleye"],
-  "Lac Okanagan" => ["Achigan smallmouth", "Truite mouchetée", "Perchaude", "Doré / Walleye"],
-  "Bras d’Or" => ["Brochet (Northern Pike)", "Perchaude", "Achigan smallmouth"],
-  "Lac des Deux Montagnes" => ["Brochet (Northern Pike)", "Doré / Walleye", "Perchaude", "Achigan smallmouth"],
-  "Lac Taureau" => ["Brochet (Northern Pike)", "Doré / Walleye", "Perchaude"],
-  "Lac Kénogami" => ["Doré / Walleye", "Brochet (Northern Pike)", "Truite mouchetée", "Perchaude"]
-}.freeze
+# Exemple simple : assigne plusieurs espèces à chaque lac existant.
+# On prend les lacs déjà présents en base, sans en supprimer/créer.
+default_fish_mix = ["Doré jaune", "Brochet", "Truite grise"]
+all_lakes = Lake.with_coordinates.order(:name)
 
-LAKE_SPECIES_NAMES.each do |lake_name, species_names|
-  lake = Lake.find_by!(name: lake_name)
-  species_names.each do |sn|
-    LakeFish.create!(lake: lake, fish_species: SPECIES[sn])
+all_lakes.each_with_index do |lake, idx|
+  mix =
+    case idx % 3
+    when 0 then default_fish_mix
+    when 1 then ["Achigan à petite bouche", "Doré jaune", "Brochet"]
+    else ["Truite mouchetée", "Truite grise", "Brochet"]
+    end
+
+  mix.each do |fish_name|
+    LakeFish.find_or_create_by!(lake: lake, fish_species: species_by_name[fish_name])
   end
 end
 
-Rails.logger.info { "Seeds Canada : #{Lake.count} lacs, #{FishSpecies.count} espèces, #{Lure.count} leurres, #{FishLure.count} paires poisson–leurre." }
+Rails.logger.info do
+  "Seeds : #{Lake.count} lacs, #{FishSpecies.count} espèces, #{Lure.count} leurres, #{LakeFish.count} associations lac-poisson, #{FishLure.count} associations poisson-leurre."
+end
