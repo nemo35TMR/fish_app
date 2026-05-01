@@ -115,8 +115,14 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 .lake-leaflet-popup .leaflet-popup-content {
   margin: 12px 14px;
   line-height: 1.45;
-  max-height: unquote("min(70vh, 520px)");
+  max-height: 70vh;
   overflow-y: auto;
+}
+
+@media (min-height: 743px) {
+  .lake-leaflet-popup .leaflet-popup-content {
+    max-height: 520px;
+  }
 }
 
 /* Fiche lac sur la carte : style « carte profil », scroll interne si besoin. */
@@ -130,14 +136,21 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 
 .lake-leaflet-popup--fiche .leaflet-popup-content {
   margin: 6px 8px;
-  width: min(320px, calc(100vw - 28px)) !important;
-  max-width: min(320px, calc(100vw - 28px)) !important;
+  /* SassC interprète min() comme une fonction Sass : largeur = 320px plafonnée par le viewport. */
+  width: 320px !important;
+  max-width: calc(100vw - 28px) !important;
   box-sizing: border-box;
-  max-height: min(620px, calc(100dvh - 96px)) !important;
+  max-height: calc(100dvh - 96px) !important;
   overflow: hidden !important;
   line-height: 1.4;
   display: flex;
   flex-direction: column;
+}
+
+@media (min-height: 716px) {
+  .lake-leaflet-popup--fiche .leaflet-popup-content {
+    max-height: 620px !important;
+  }
 }
 
 /* Évite un double scroll Leaflet tout en laissant défiler le contenu de la fiche. */
