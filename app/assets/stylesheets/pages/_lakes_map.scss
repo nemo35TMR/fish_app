@@ -15,13 +15,17 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 .lakes-map-page__toolbar {
   position: sticky;
   top: 0;
-  z-index: 1030;
+  z-index: 1080;
+  flex-shrink: 0;
+  isolation: isolate;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(6px);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .lakes-map-page__layout {
+  position: relative;
+  z-index: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -34,9 +38,11 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 }
 
 .lakes-map-page__map {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
   flex: 1;
   min-height: 42vh;
-  position: relative;
 
   @media (min-width: 992px) {
     min-height: 0;
@@ -56,7 +62,7 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
     font-family: inherit;
     height: 100%;
     width: 100%;
-    z-index: 1;
+    z-index: auto;
     outline: none;
     overflow: visible;
   }
@@ -1005,11 +1011,15 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 
 /* Scroll interne au panneau : évite scrollIntoView sur tout le document (effet « la page descend »). */
 .lakes-map-page__panel {
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
   flex: 1;
   min-height: 0;
   padding: 0.75rem;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  background: var(--bs-body-bg, #f8f9fa);
 
   @media (max-width: 991.98px) {
     max-height: calc(100dvh - 128px);
