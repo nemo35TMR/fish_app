@@ -1,12 +1,11 @@
 Rails.application.routes.draw do
-  # Accueil = carte des lacs (HTML). GET /lakes.json → même action, format JSON (carte Leaflet).
   root "lakes#index"
-
-  devise_for :users
 
   resources :lakes, only: [:index, :show] do
     resources :chats, only: [:new, :create]
   end
+
+  devise_for :users
 
   get "geocoding/search", to: "geocoding#search", defaults: { format: :json }, as: :geocoding_search
 
