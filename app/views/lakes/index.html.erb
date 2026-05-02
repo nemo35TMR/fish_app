@@ -68,7 +68,11 @@
               <p class="mb-0">Recherchez une ville ou utilisez votre position, puis sélectionnez un lac dans la liste ou sur la carte.</p>
             </div>
 
-            <div data-lakes-map-target="details" class="d-none lakes-map-page__fade flex-grow-1 d-flex flex-column min-h-0">
+            <div
+              data-lakes-map-target="details"
+              class="d-none lakes-map-page__fade flex-grow-1 d-flex flex-column min-h-0"
+              data-action="click->lakes-map#panelFishClick keydown->lakes-map#panelFishKeydown"
+            >
               <div class="d-flex justify-content-between align-items-start gap-2">
                 <h3 class="h5 mb-1 d-flex align-items-center gap-2 lake-panel__title">
                   <span class="lake-panel__title-icon" aria-hidden="true">🌊</span>

@@ -2,9 +2,10 @@
 
 # Seed simple et idempotent :
 # - ne touche pas au schéma
-# - réutilise les lacs déjà présents
-# - ajoute espèces, leurres et associations manquantes
+# - si aucun lac en base (ex. Heroku après migrate), importe db/data/canadian_lakes.geojson
+# - sinon réutilise les lacs existants et ajoute espèces / leurres / associations
 # Relancer : bin/rails db:seed
+# Import manuel des lacs : bin/rails lakes:import_canada
 
 user = User.find_or_initialize_by(email: "pecheur@example.com")
 if user.new_record?
@@ -73,8 +74,17 @@ fish_to_lures.each do |fish_name, lure_names|
 end
 
 # Exemple simple : assigne plusieurs espèces à chaque lac existant.
-# On prend les lacs déjà présents en base, sans en supprimer/créer.
 default_fish_mix = ["Doré jaune", "Brochet", "Truite grise"]
+if Lake.count.zero?
+  geo_path = Rails.root.join("db/data/canadian_lakes.geojson")
+  if File.exist?(geo_path)
+    n = Lakes::GeojsonImporter.import!(geo_path)
+    Rails.logger.info { "Seeds : import de #{n} lac(s) depuis #{geo_path}." }
+  else
+    Rails.logger.warn { "Seeds : aucun lac et fichier GeoJSON absent (#{geo_path}). Lancez rails lakes:import_canada ou ajoutez des lacs." }
+  end
+end
+
 all_lakes = Lake.with_coordinates.order(:name)
 
 all_lakes.each_with_index do |lake, idx|
