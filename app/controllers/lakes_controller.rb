@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class LakesController < ApplicationController
-  # Page HTML + même liste en JSON pour la carte (marqueurs : latitude / longitude en base).
+  skip_before_action :authenticate_user!, only: %i[index show]
   def index
     lakes = Lake.with_coordinates.includes(fish_species: :lures).order(:name)
 

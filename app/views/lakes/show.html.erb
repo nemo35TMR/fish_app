@@ -5,6 +5,8 @@
     <%= link_to "Retour à la carte", root_path, class: "btn btn-outline-primary btn-sm" %>
   </div>
   <p class="text-muted"><%= @lake.location %></p>
+  <p>user_signed_in? : <%= user_signed_in? %></p>
+<p>current_user : <%= current_user&.id %></p>
   <p><%= @lake.description %></p>
   <% if @lake.latitude.present? && @lake.longitude.present? %>
     <p class="small text-muted">Coordonnées : <%= @lake.latitude %>, <%= @lake.longitude %></p>

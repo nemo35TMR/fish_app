@@ -740,6 +740,7 @@ export default class extends Controller {
 
     if (this.hasChatLinkTarget) {
       this.chatLinkTarget.href = this.chatUrlFormatValue.replace("%{id}", String(lake.id))
+      this.chatLinkTarget.classList.remove("d-none") // 👈 affiche le bouton
     }
 
     this.scrollLakeDetailsIntoView()
