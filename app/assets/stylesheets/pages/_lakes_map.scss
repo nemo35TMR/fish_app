@@ -44,12 +44,13 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   }
 }
 
+/* overflow visible : sinon la fiche Leaflet est découpée en bas (overflow hidden sur le conteneur). */
 .lakes-map-page__map-inner {
   position: absolute;
   inset: 0;
   min-height: 360px;
   border-radius: 0;
-  overflow: hidden;
+  overflow: visible;
 
   .leaflet-container {
     font-family: inherit;
@@ -57,6 +58,7 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
     width: 100%;
     z-index: 1;
     outline: none;
+    overflow: visible;
   }
 
   .leaflet-tile-pane {
@@ -88,24 +90,25 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 
 .lake-map-marker:focus-visible {
   border-radius: 4px;
-  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.45);
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.4);
 }
 
 .lake-map-marker__inner {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: #0ea5b7;
-  color: #fff;
-  font-size: 16px;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+  min-width: 28px;
+  min-height: 28px;
+  font-size: 18px;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.4));
 }
 
 .lake-map-marker--selected .lake-map-marker__inner {
-  background: #15803d;
+  filter: drop-shadow(0 0 3px rgba(21, 128, 61, 0.95)) drop-shadow(0 1px 2px rgba(15, 23, 42, 0.35));
 }
 
 .lake-leaflet-popup .leaflet-popup-content-wrapper {
@@ -159,8 +162,9 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   overflow: visible !important;
 }
 
+/* Conserver le positionnement Leaflet (absolute + bottom/left) : « relative » cassait l’autopan et le recadrage. */
 .lake-leaflet-popup--fiche.leaflet-popup {
-  position: relative;
+  position: absolute;
 }
 
 .lake-leaflet-popup--fiche a.leaflet-popup-close-button {
@@ -224,7 +228,7 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 .lake-fiche-popup__hero-sky {
   height: 100%;
   width: 100%;
-  background: linear-gradient(165deg, #38bdf8 0%, #7dd3fc 38%, #bae6fd 72%, #e0f2fe 100%);
+  background: linear-gradient(165deg, #f8fafc 0%, #e2e8f0 45%, #f1f5f9 100%);
 }
 
 .lake-fiche-popup__avatar-stage {
@@ -238,10 +242,10 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 }
 
 .lake-fiche-popup__avatar-ring {
-  padding: 3px;
+  padding: 2px;
   border-radius: 50%;
-  background: conic-gradient(from 200deg, #a78bfa, #38bdf8, #34d399, #fbbf24, #f472b6, #a78bfa);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  background: #e2e8f0;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
 }
 
 .lake-fiche-popup__avatar {
@@ -766,9 +770,9 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 
 .lake-fiche-popup__carousel-btn:hover:not(:disabled) {
   background: #fff;
-  color: #1d4ed8;
-  border-color: rgba(37, 99, 235, 0.35);
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.12);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
 }
 
 .lake-fiche-popup__carousel-btn:active:not(:disabled) {
@@ -827,19 +831,19 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 
 .lake-fiche-popup__fish-btn:hover {
   background: #fff;
-  border-color: rgba(14, 165, 233, 0.35);
-  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.12);
+  border-color: rgba(15, 23, 42, 0.1);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
 }
 
 .lake-fiche-popup__fish-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.45);
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.35);
 }
 
 .lake-fiche-popup__fish-btn.is-active {
   border-color: transparent;
-  background: linear-gradient(160deg, rgba(219, 234, 254, 0.98) 0%, rgba(224, 242, 254, 0.95) 100%);
-  box-shadow: 0 0 0 2px #2563eb, 0 6px 16px rgba(37, 99, 235, 0.18);
+  background: linear-gradient(160deg, #f8fafc 0%, #f1f5f9 100%);
+  box-shadow: 0 0 0 2px #94a3b8, 0 6px 16px rgba(15, 23, 42, 0.1);
   transform: scale(1.04);
   z-index: 1;
   position: relative;
@@ -861,7 +865,7 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 
 .lake-fiche-popup__fish-btn.is-active .lake-fiche-popup__fish-chip__name,
 .lake-fiche-popup__fish-btn.is-active .lake-fiche-popup__fish-name {
-  color: #1e40af;
+  color: #0f172a;
   font-weight: 800;
 }
 
@@ -939,17 +943,22 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   display: block !important;
 }
 
+/* Scroll interne au panneau : évite scrollIntoView sur tout le document (effet « la page descend »). */
 .lakes-map-page__panel {
   flex: 1;
   min-height: 0;
   padding: 0.75rem;
-  max-height: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+
+  @media (max-width: 991.98px) {
+    max-height: calc(100dvh - 128px);
+  }
 
   @media (min-width: 992px) {
     flex: 0 0 420px;
     max-width: 38vw;
     max-height: calc(100vh - 200px);
-    overflow: auto;
     padding: 1rem;
   }
 }
@@ -1037,6 +1046,35 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   text-align: center;
+}
+
+.lake-panel__fish-card--btn {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.lake-panel__fish-card--btn:hover {
+  background: #fff;
+  border-color: #cbd5e1;
+}
+
+.lake-panel__fish-card--btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.35);
+}
+
+.lake-panel__fish-card--active {
+  background: #fff;
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 2px #94a3b8;
+}
+
+.lake-panel__fish-lure-group {
+  list-style: none;
 }
 
 .lake-panel__fish-thumb {

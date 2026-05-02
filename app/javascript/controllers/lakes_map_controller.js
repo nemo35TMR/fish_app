@@ -172,7 +172,15 @@ export default class extends Controller {
     if (!this._map) return
     requestAnimationFrame(() => {
       this._map.invalidateSize()
-      window.setTimeout(() => this._map?.invalidateSize(), 200)
+      if (this.fichePopupIsOpen()) {
+        this.refitFichePopupInViewport()
+      }
+      window.setTimeout(() => {
+        this._map?.invalidateSize()
+        if (this.fichePopupIsOpen()) {
+          this.refitFichePopupInViewport()
+        }
+      }, 200)
     })
   }
 
@@ -194,6 +202,7 @@ export default class extends Controller {
 
     L.control.scale({ maxWidth: 120, imperial: false, metric: true }).addTo(this._map)
 
+    const comfortPad = this.fichePopupComfortMarginPx()
     this._popup = L.popup({
       closeButton: true,
       className: "lake-leaflet-popup lake-leaflet-popup--fiche",
@@ -201,7 +210,9 @@ export default class extends Controller {
       minWidth: 240,
       autoPan: true,
       keepInView: true,
-      autoPanPadding: this.L.point(20, 20)
+      autoPanPadding: this.L.point(comfortPad, comfortPad),
+      autoPanPaddingTopLeft: this.L.point(comfortPad, comfortPad),
+      autoPanPaddingBottomRight: this.L.point(comfortPad, comfortPad)
     })
 
     this._popupLake = null
@@ -209,8 +220,8 @@ export default class extends Controller {
       if (e.popup !== this._popup) return
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          this._popup?.update?.()
-          this.applyFichePopupLayoutLock()
+          this.refitFichePopupInViewport()
+          window.setTimeout(() => this.refitFichePopupInViewport(), 120)
         })
       })
     }
@@ -349,7 +360,7 @@ export default class extends Controller {
       const openLake = (domEvent) => {
         if (domEvent?.preventDefault) domEvent.preventDefault()
         if (domEvent?.stopPropagation) domEvent.stopPropagation()
-        this.openLakeFromMap(lake, lat, lng)
+        this.openLakeFromMap(lake, lat, lng, { skipFlyTo: true })
       }
 
       m.on("click", openLake)
@@ -378,18 +389,96 @@ export default class extends Controller {
     return el
   }
 
+  fichePopupIsOpen() {
+    return !!(this._popup && this._map && typeof this._map.hasLayer === "function" && this._map.hasLayer(this._popup))
+  }
+
+  /**
+   * Marge carte ↔ popup (cible ~40–80 px) : même valeur pour `_adjustPan` et pour `nudgeFichePopupIntoMapView`,
+   * pour ne pas coller la fiche aux bords du conteneur Leaflet.
+   */
+  fichePopupComfortMarginPx() {
+    const el = this._map?.getContainer?.()
+    if (!el) return 56
+    const s = Math.min(el.clientWidth || 640, el.clientHeight || 480)
+    return Math.min(80, Math.max(40, Math.round(s * 0.095)))
+  }
+
+  /**
+   * Paddings `autoPan` dans le repère du conteneur Leaflet uniquement (pas toolbar / panneau hors carte).
+   */
+  syncFichePopupAutoPanPadding() {
+    if (!this.L || !this._popup) return
+    const pad = this.fichePopupComfortMarginPx()
+    const p = this.L.point(pad, pad)
+    this._popup.options.autoPanPadding = p
+    this._popup.options.autoPanPaddingTopLeft = p
+    this._popup.options.autoPanPaddingBottomRight = p
+  }
+
+  /**
+   * Recalcul padding autopan, verrouillage hauteur, puis `update()` Leaflet
+   * (pour que `_adjustPan` voie la vraie hauteur de la fiche).
+   */
+  refitFichePopupInViewport() {
+    if (!this._map || !this.fichePopupIsOpen()) return
+    this.syncFichePopupAutoPanPadding()
+    this.applyFichePopupLayoutLock()
+    this._popup?.update?.()
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => this.nudgeFichePopupIntoMapView())
+    })
+  }
+
+  /**
+   * Garde la fiche dans le cadre du conteneur carte (même logique séquentielle que Leaflet `_adjustPan`),
+   * avec la même marge confort que `autoPanPadding` (~40–80 px).
+   */
+  nudgeFichePopupIntoMapView() {
+    if (!this._map || !this.fichePopupIsOpen() || !this.L) return
+    const c = this._map.getContainer()
+    const el = c.querySelector(".leaflet-popup.lake-leaflet-popup--fiche")
+    if (!el) return
+    const m = this.fichePopupComfortMarginPx()
+    const w = c.clientWidth
+    const h = c.clientHeight
+    const cr = c.getBoundingClientRect()
+    try {
+      for (let step = 0; step < 8; step++) {
+        const pr = el.getBoundingClientRect()
+        const posX = pr.left - cr.left
+        const posY = pr.top - cr.top
+        const width = pr.width
+        const height = pr.height
+        let dx = 0
+        let dy = 0
+        if (posX + width + m > w) dx = posX + width - w + m
+        if (posX - dx < m) dx = posX - m
+        if (posY + height + m > h) dy = posY + height - h + m
+        if (posY - dy < m) dy = posY - m
+        if (dx === 0 && dy === 0) break
+        this._map.panBy(this.L.point(dx, dy), { animate: false })
+      }
+    } catch {
+      /* noop */
+    }
+  }
+
   /** Clic sur la carte : panneau latéral + popup avec poissons / leurres. */
-  openLakeFromMap(lake, lat, lng) {
-    this.selectLake(lake.id)
+  openLakeFromMap(lake, lat, lng, options = {}) {
+    const { skipFlyTo = false } = options
+    this.selectLake(lake.id, { skipFlyTo })
     if (this._popup && this._map) {
+      this.syncFichePopupAutoPanPadding()
       this._popupLake = lake
       this._popup.setLatLng([lat, lng]).setContent(this.markerPopupHtml(lake)).openOn(this._map)
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          this._popup?.update?.()
-          this.applyFichePopupLayoutLock()
+          this.refitFichePopupInViewport()
           this.bindLakeFichePopupInteractions()
-          window.setTimeout(() => this.applyFichePopupLayoutLock(), 0)
+          window.setTimeout(() => this.refitFichePopupInViewport(), 0)
+          window.setTimeout(() => this.refitFichePopupInViewport(), 160)
+          window.setTimeout(() => this.refitFichePopupInViewport(), 360)
         })
       })
     }
@@ -486,9 +575,9 @@ export default class extends Controller {
       }
 
       requestAnimationFrame(() => {
-        this._popup?.update?.()
-        this.applyFichePopupLayoutLock()
+        this.refitFichePopupInViewport()
         syncCarouselNav()
+        window.setTimeout(() => this.refitFichePopupInViewport(), 80)
       })
     }
 
@@ -505,9 +594,25 @@ export default class extends Controller {
     )
   }
 
+  /** Fait défiler uniquement le panneau latéral (pas la fenêtre) pour garder le bloc « détails » visible. */
   scrollLakeDetailsIntoView() {
+    if (!this.hasDetailsTarget) return
     const panel = this.element.querySelector(".lakes-map-page__panel")
-    if (panel) panel.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    if (!panel || this.detailsTarget.classList.contains("d-none")) return
+    this.scrollRectIntoScrollParent(panel, this.detailsTarget)
+  }
+
+  /** Ajuste scrollTop du conteneur pour que `el` reste dans la zone visible (sans scrollIntoView sur le document). */
+  scrollRectIntoScrollParent(container, el) {
+    if (!container || !el) return
+    const pad = 10
+    const cr = container.getBoundingClientRect()
+    const er = el.getBoundingClientRect()
+    if (er.bottom > cr.bottom - pad) {
+      container.scrollTop += er.bottom - cr.bottom + pad
+    } else if (er.top < cr.top + pad) {
+      container.scrollTop -= cr.top - er.top + pad
+    }
   }
 
   clearMarkers() {
@@ -659,7 +764,8 @@ export default class extends Controller {
     })
   }
 
-  selectLake(id) {
+  selectLake(id, options = {}) {
+    const { skipFlyTo = false } = options
     const lake = this.lakes.find((l) => l.id === id) || this.markersById.get(id)?.lake
     if (!lake || !this._map) return
 
@@ -669,7 +775,7 @@ export default class extends Controller {
 
     const lng = Number(lake.longitude)
     const lat = Number(lake.latitude)
-    if (Number.isFinite(lng) && Number.isFinite(lat)) {
+    if (!skipFlyTo && Number.isFinite(lng) && Number.isFinite(lat)) {
       const z = Math.max(this._map.getZoom(), 8)
       this._map.flyTo([lat, lng], z, { duration: 0.65 })
     }
@@ -677,14 +783,23 @@ export default class extends Controller {
     this.emptyStateTarget.classList.add("d-none")
     this.detailsTarget.classList.remove("d-none")
 
+    this._panelFishFilterId = null
+
     this.lakeNameTarget.textContent = lake.name
     this.lakeDescriptionTarget.textContent = lake.description || "—"
     this.lakeLocationTarget.textContent = lake.location_label || "—"
 
     this.fishListTarget.innerHTML = ""
     ;(lake.fish_species || []).forEach((fs) => {
-      const card = document.createElement("div")
-      card.className = "lake-panel__fish-card"
+      const card = document.createElement("button")
+      card.type = "button"
+      card.className = "lake-panel__fish-card lake-panel__fish-card--btn"
+      card.dataset.fishSpeciesId = String(fs.id)
+      card.setAttribute("aria-pressed", "false")
+      card.setAttribute(
+        "aria-label",
+        `Afficher les leurres pour ${fs.name}. Réappuyer pour tout afficher.`
+      )
       const fishSrc = this.fishSpeciesImageUrl(fs)
       card.innerHTML = `
         <div class="lake-panel__fish-thumb">
@@ -702,7 +817,11 @@ export default class extends Controller {
       const lures = fs.lures || []
       if (lures.length === 0) return
       anyLure = true
-      const head = document.createElement("li")
+      const group = document.createElement("li")
+      group.className = "lake-panel__fish-lure-group list-group-item p-0 border-0"
+      group.dataset.fishSpeciesId = String(fs.id)
+
+      const head = document.createElement("div")
       head.className =
         "list-group-item lake-panel__species-head bg-light py-2 small fw-semibold text-uppercase text-muted border-0"
       const speciesImg = this.fishSpeciesImageUrl(fs)
@@ -712,7 +831,10 @@ export default class extends Controller {
           <span>${this.escapeHtml(fs.name)}</span>
         </span>
       `
-      this.luresListTarget.appendChild(head)
+      group.appendChild(head)
+
+      const innerUl = document.createElement("ul")
+      innerUl.className = "list-group list-group-flush"
       lures.forEach((lure) => {
         const li = document.createElement("li")
         li.className = "list-group-item lure-item lake-panel__lure-item py-2"
@@ -728,8 +850,10 @@ export default class extends Controller {
             </div>
           </div>
         `
-        this.luresListTarget.appendChild(li)
+        innerUl.appendChild(li)
       })
+      group.appendChild(innerUl)
+      this.luresListTarget.appendChild(group)
     })
     if (!anyLure) {
       const li = document.createElement("li")
@@ -745,7 +869,50 @@ export default class extends Controller {
     this.scrollLakeDetailsIntoView()
   }
 
+  /** Clic sur une espèce dans le panneau : filtre les leurres ; second clic = tout afficher. */
+  panelFishClick(event) {
+    if (!this.hasDetailsTarget || !this.detailsTarget.contains(event.target)) return
+    const card = event.target.closest(".lake-panel__fish-card[data-fish-species-id]")
+    if (!card || !this.hasFishListTarget || !this.fishListTarget.contains(card)) return
+    event.preventDefault()
+    const id = Number(card.dataset.fishSpeciesId)
+    if (!Number.isFinite(id)) return
+    const sid = String(id)
+    this._panelFishFilterId = this._panelFishFilterId === sid ? null : sid
+    this.syncLakePanelFishFilter()
+  }
+
+  panelFishKeydown(event) {
+    if (event.key !== "Enter" && event.key !== " ") return
+    if (!this.hasDetailsTarget || !this.detailsTarget.contains(event.target)) return
+    const card = event.target.closest(".lake-panel__fish-card[data-fish-species-id]")
+    if (!card || !this.hasFishListTarget || !this.fishListTarget.contains(card)) return
+    event.preventDefault()
+    card.click()
+  }
+
+  syncLakePanelFishFilter() {
+    if (!this.hasFishListTarget || !this.hasLuresListTarget) return
+    const filter = this._panelFishFilterId
+    this.fishListTarget.querySelectorAll(".lake-panel__fish-card[data-fish-species-id]").forEach((btn) => {
+      const on = Boolean(filter && btn.dataset.fishSpeciesId === filter)
+      btn.classList.toggle("lake-panel__fish-card--active", on)
+      btn.setAttribute("aria-pressed", String(on))
+    })
+    this.luresListTarget.querySelectorAll(".lake-panel__fish-lure-group").forEach((group) => {
+      const show = !filter || group.dataset.fishSpeciesId === filter
+      group.classList.toggle("d-none", !show)
+    })
+    if (filter) {
+      const visible = this.luresListTarget.querySelector(
+        `.lake-panel__fish-lure-group[data-fish-species-id="${filter}"]`
+      )
+      if (visible) this.scrollRectIntoScrollParent(this.luresListTarget, visible)
+    }
+  }
+
   resetDetails() {
+    this._panelFishFilterId = null
     this.selectedId = null
     this.emptyStateTarget.classList.remove("d-none")
     this.detailsTarget.classList.add("d-none")
