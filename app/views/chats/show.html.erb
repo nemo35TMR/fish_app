@@ -1,51 +1,64 @@
 <% content_for :title, @chat.title %>
+
 <div class="container py-4 chat-show" style="max-width: 720px">
+
   <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
     <div>
       <h1 class="h4 mb-1"><%= @chat.title %></h1>
-      <p class="small text-muted mb-0">Lac : <%= link_to @chat.lake.name, lake_path(@chat.lake) %></p>
+      <p class="small text-muted mb-0">
+        Lac : <%= link_to @chat.lake.name, lake_path(@chat.lake) %>
+      </p>
     </div>
     <%= link_to "Carte", root_path, class: "btn btn-outline-primary btn-sm" %>
   </div>
 
-  <div id="messages">
-  <% @chat.messages.each do |message| %>
-    <% if message.role == "user" %>
-      <div style="text-align: right;">
-        <strong>You:</strong> <%= message.content %>
-      </div>
-    <% else %>
-      <div style="text-align: left;">
-        <strong>AI:</strong> <%= message.content %>
-      </div>
-    <% end %>
-  <% end %>
-</div>
-
+  <!-- MESSAGES -->
   <div class="card shadow-sm border-0 mb-3">
-    <div class="card-body chat-show__messages">
-      <% @messages.each do |message| %>
-        <article class="chat-show__message mb-3">
-          <div class="small text-muted mb-1"><%= message.created_at.strftime("%d/%m/%Y %H:%M") %></div>
-          <div class="chat-show__bubble"><%= simple_format(message.content) %></div>
-        </article>
+    <div class="card-body">
+
+      <% if @messages.any? %>
+        <% @messages.each do |message| %>
+
+          <% if message.role == "user" %>
+            <div class="text-end mb-2">
+              <strong>You:</strong>
+              <div><%= simple_format(message.content) %></div>
+            </div>
+          <% else %>
+            <div class="text-start mb-3">
+              <strong>AI:</strong>
+              <div><%= simple_format(message.content) %></div>
+            </div>
+          <% end %>
+
+        <% end %>
+      <% else %>
+        <p class="text-muted small mb-0">
+          Aucun message pour l’instant. Envoyez le premier !
+        </p>
       <% end %>
-      <% if @messages.empty? %>
-        <p class="text-muted small mb-0">Aucun message pour l’instant. Envoyez le premier !</p>
-      <% end %>
+
     </div>
   </div>
 
+  <!-- FORMULAIRE -->
   <%= form_with model: [@chat, @message], class: "card shadow-sm border-0" do |f| %>
     <div class="card-body">
+
       <% if @message&.errors&.any? %>
-        <div class="alert alert-danger small"><%= @message.errors.full_messages.to_sentence %></div>
+        <div class="alert alert-danger small">
+          <%= @message.errors.full_messages.to_sentence %>
+        </div>
       <% end %>
+
       <%= f.label :content, "Votre message", class: "form-label" %>
       <%= f.text_area :content, rows: 3, class: "form-control", required: true %>
+
       <div class="d-flex justify-content-end mt-2">
         <%= f.submit "Envoyer", class: "btn btn-primary" %>
       </div>
+
     </div>
   <% end %>
+
 </div>

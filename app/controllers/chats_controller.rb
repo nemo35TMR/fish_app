@@ -30,7 +30,11 @@ class ChatsController < ApplicationController
   end
 
   def set_chat
-    @chat = current_user.chats.find(params[:id])
+    @chat = current_user.chats.find_by(id: params[:id])
+
+    return if @chat
+
+    redirect_to lakes_path, alert: "Chat introuvable ou non autorisé."
   end
 
   def chat_params

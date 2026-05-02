@@ -492,9 +492,10 @@ export default class extends Controller {
       this.luresListTarget.appendChild(li)
     }
 
-    if (this.hasChatLinkTarget) {
-      this.chatLinkTarget.href = this.chatUrlFormatValue.replace("%{id}", String(lake.id))
-    }
+  if (this.hasChatLinkTarget) {
+  this.chatLinkTarget.href = this.chatUrlFormatValue.replace("%{id}", String(lake.id))
+  this.chatLinkTarget.classList.remove("d-none") // 👈 affiche le bouton
+}
   }
 
   resetDetails() {
