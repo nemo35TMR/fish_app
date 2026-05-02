@@ -22,8 +22,9 @@
   <body class="d-flex flex-column min-vh-100 bg-light">
     <%= render "shared/navbar" %>
     <%= render "shared/flashes" %>
-    <main class="flex-grow-1">
+    <main class="flex-grow-1 d-flex flex-column">
       <%= yield %>
     </main>
+    <%= yield :body_scripts %>
   </body>
 </html>

@@ -20,6 +20,7 @@ class LakesController < ApplicationController
 
     respond_to do |format|
       format.html
+      # Le JavaScript de la carte appelle cette URL (data-lakes-map-lakes-json-url) pour placer les marqueurs.
       format.json { render json: lakes.map { |lake| lake_map_payload(lake) } }
     end
   end
@@ -62,6 +63,7 @@ class LakesController < ApplicationController
       {
         id: fs.id,
         name: fs.name,
+        image_url: fs.public_image_path,
         lures: fs.lures.map { |l| { id: l.id, name: l.name, description: l.description } }
       }
     end
