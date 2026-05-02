@@ -91,11 +91,23 @@ export default class extends Controller {
       this._map.off("popupopen", this._boundLakeFichePopupOpen)
       this._map.off("popupclose", this._boundLakeFichePopupClose)
     }
+    if (this._map && this._boundLakeZoomEndAdjustPopup) {
+      this._map.off("zoomend", this._boundLakeZoomEndAdjustPopup)
+    }
     this._boundLakeFichePopupOpen = null
     this._boundLakeFichePopupClose = null
+    this._boundLakeZoomEndAdjustPopup = null
     this._popupLake = null
     this._fishPickAbort?.abort()
     this._fishPickAbort = null
+    if (this._popup && this._boundPopupContentUpdate) {
+      try {
+        this._popup.off("contentupdate", this._boundPopupContentUpdate)
+      } catch {
+        /* noop */
+      }
+    }
+    this._boundPopupContentUpdate = null
     if (this._popup && this._map) {
       try {
         this._map.closePopup(this._popup)
@@ -173,12 +185,12 @@ export default class extends Controller {
     requestAnimationFrame(() => {
       this._map.invalidateSize()
       if (this.fichePopupIsOpen()) {
-        this.refitFichePopupInViewport()
+        this.layoutLakeFichePopup()
       }
       window.setTimeout(() => {
         this._map?.invalidateSize()
         if (this.fichePopupIsOpen()) {
-          this.refitFichePopupInViewport()
+          this.layoutLakeFichePopup()
         }
       }, 200)
     })
@@ -202,34 +214,42 @@ export default class extends Controller {
 
     L.control.scale({ maxWidth: 120, imperial: false, metric: true }).addTo(this._map)
 
-    const comfortPad = this.fichePopupComfortMarginPx()
     this._popup = L.popup({
       closeButton: true,
-      className: "lake-leaflet-popup lake-leaflet-popup--fiche",
-      maxWidth: 320,
-      minWidth: 240,
-      autoPan: true,
-      keepInView: true,
-      autoPanPadding: this.L.point(comfortPad, comfortPad),
-      autoPanPaddingTopLeft: this.L.point(comfortPad, comfortPad),
-      autoPanPaddingBottomRight: this.L.point(comfortPad, comfortPad)
+      className: "lake-leaflet-popup lake-leaflet-popup--fiche lake-leaflet-popup--compact-bento",
+      maxWidth: 280,
+      minWidth: 220,
+      offset: [0, 10],
+      autoPan: false,
+      keepInView: false
     })
 
     this._popupLake = null
     this._boundLakeFichePopupOpen = (e) => {
       if (e.popup !== this._popup) return
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          this.refitFichePopupInViewport()
-          window.setTimeout(() => this.refitFichePopupInViewport(), 120)
-        })
+        this.layoutLakeFichePopup()
+        window.setTimeout(() => this.reclampLakeFichePopupOnly(), 180)
       })
     }
+
+    this._boundPopupContentUpdate = () => {
+      if (!this.fichePopupIsOpen()) return
+      queueMicrotask(() => this.reclampLakeFichePopupOnly())
+    }
+    this._popup.on("contentupdate", this._boundPopupContentUpdate)
     this._boundLakeFichePopupClose = (e) => {
       if (e.popup === this._popup) this._popupLake = null
     }
     this._map.on("popupopen", this._boundLakeFichePopupOpen)
     this._map.on("popupclose", this._boundLakeFichePopupClose)
+
+    this._boundLakeZoomEndAdjustPopup = () => {
+      if (this.fichePopupIsOpen()) {
+        requestAnimationFrame(() => this.ajusterFichePopupDansConteneurCarte())
+      }
+    }
+    this._map.on("zoomend", this._boundLakeZoomEndAdjustPopup)
 
     this._map.whenReady(() => {
       this.scheduleMapResize()
@@ -356,6 +376,7 @@ export default class extends Controller {
       })
 
       const m = L.marker([lat, lng], { icon: ic }).addTo(this._map)
+      requestAnimationFrame(() => this.clearLakeMarkerLeafletWrapperStyles(m))
 
       const openLake = (domEvent) => {
         if (domEvent?.preventDefault) domEvent.preventDefault()
@@ -385,83 +406,111 @@ export default class extends Controller {
     el.tabIndex = 0
     el.title = lake.name
     el.setAttribute("aria-label", `${lake.name} — afficher poissons, leurres et détails`)
+    el.style.background = "transparent"
+    el.style.border = "none"
     el.innerHTML = `<span class="lake-map-marker__inner" aria-hidden="true">🎣</span>`
+    const inner = el.querySelector(".lake-map-marker__inner")
+    if (inner) {
+      inner.style.background = "transparent"
+      inner.style.border = "none"
+      inner.style.borderRadius = "0"
+      inner.style.boxShadow = "none"
+    }
     return el
+  }
+
+  /** Conteneur Leaflet du marqueur : pas de fond hérité (vieux CSS / thème). */
+  clearLakeMarkerLeafletWrapperStyles(marker) {
+    const wrap = typeof marker.getElement === "function" ? marker.getElement() : null
+    if (!wrap) return
+    wrap.style.background = "transparent"
+    wrap.style.border = "none"
+    wrap.style.boxShadow = "none"
+    wrap.style.borderRadius = "0"
   }
 
   fichePopupIsOpen() {
     return !!(this._popup && this._map && typeof this._map.hasLayer === "function" && this._map.hasLayer(this._popup))
   }
 
-  /**
-   * Marge carte ↔ popup (cible ~40–80 px) : même valeur pour `_adjustPan` et pour `nudgeFichePopupIntoMapView`,
-   * pour ne pas coller la fiche aux bords du conteneur Leaflet.
-   */
-  fichePopupComfortMarginPx() {
-    const el = this._map?.getContainer?.()
-    if (!el) return 56
-    const s = Math.min(el.clientWidth || 640, el.clientHeight || 480)
-    return Math.min(80, Math.max(40, Math.round(s * 0.095)))
+  /** Lit un offset px depuis un style (`12px` / nombre). */
+  _parseCssPx(val) {
+    const v = parseFloat(String(val || "").replace("px", ""))
+    return Number.isFinite(v) ? v : null
   }
 
   /**
-   * Paddings `autoPan` dans le repère du conteneur Leaflet uniquement (pas toolbar / panneau hors carte).
+   * Recadrage seul après changement de contenu / images (sans rappeler `update()` qui réinitialiserait la géométrie).
    */
-  syncFichePopupAutoPanPadding() {
-    if (!this.L || !this._popup) return
-    const pad = this.fichePopupComfortMarginPx()
-    const p = this.L.point(pad, pad)
-    this._popup.options.autoPanPadding = p
-    this._popup.options.autoPanPaddingTopLeft = p
-    this._popup.options.autoPanPaddingBottomRight = p
-  }
-
-  /**
-   * Recalcul padding autopan, verrouillage hauteur, puis `update()` Leaflet
-   * (pour que `_adjustPan` voie la vraie hauteur de la fiche).
-   */
-  refitFichePopupInViewport() {
+  reclampLakeFichePopupOnly() {
     if (!this._map || !this.fichePopupIsOpen()) return
-    this.syncFichePopupAutoPanPadding()
+    this.applyFichePopupLayoutLock()
+    this.ajusterFichePopupDansConteneurCarte()
+  }
+
+  /**
+   * Recadre la fiche dans le conteneur carte **sans déplacer la carte** : ajuste seulement `left` / `bottom`
+   * du nœud Leaflet (comme un léger repositionnement si le bas ou les côtés dépassent).
+   */
+  ajusterFichePopupDansConteneurCarte() {
+    if (!this._map || !this.fichePopupIsOpen()) return
+    const mapEl = this._map.getContainer()
+    const popupEl = mapEl.querySelector(".leaflet-popup.lake-leaflet-popup--fiche")
+    if (!popupEl) return
+    const pad = 10
+    const mr = mapEl.getBoundingClientRect()
+    for (let step = 0; step < 14; step++) {
+      const pr = popupEl.getBoundingClientRect()
+      let left = this._parseCssPx(popupEl.style.left)
+      let bottom = this._parseCssPx(popupEl.style.bottom)
+      if (left === null || bottom === null) {
+        const cs = getComputedStyle(popupEl)
+        left = this._parseCssPx(cs.left) ?? 0
+        bottom = this._parseCssPx(cs.bottom) ?? 0
+      }
+      let changed = false
+      if (pr.right > mr.right - pad) {
+        left -= pr.right - (mr.right - pad)
+        changed = true
+      }
+      if (pr.left < mr.left + pad) {
+        left += mr.left + pad - pr.left
+        changed = true
+      }
+      if (pr.bottom > mr.bottom - pad) {
+        bottom += pr.bottom - (mr.bottom - pad)
+        changed = true
+      }
+      if (pr.top < mr.top + pad) {
+        bottom -= mr.top + pad - pr.top
+        changed = true
+      }
+      if (!changed) break
+      popupEl.style.left = `${left}px`
+      popupEl.style.bottom = `${bottom}px`
+    }
+  }
+
+  /** Hauteur max du contenu popup selon la hauteur utile du conteneur carte (pas de pan carte). */
+  fichePopupMaxContentHeightPx() {
+    const el = this._map?.getContainer?.()
+    if (!el) return 320
+    return Math.max(200, Math.min(380, el.clientHeight - 40))
+  }
+
+  /**
+   * Verrouillage layout + `update()` Leaflet puis recadrage **immédiat** : chaque `update()` réécrit
+   * `left`/`bottom` — il faut rappeler `ajuster` tout de suite, sinon le popup repasse sous le cadre un frame.
+   */
+  layoutLakeFichePopup() {
+    if (!this._map || !this.fichePopupIsOpen()) return
     this.applyFichePopupLayoutLock()
     this._popup?.update?.()
+    this.applyFichePopupLayoutLock()
+    this.ajusterFichePopupDansConteneurCarte()
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => this.nudgeFichePopupIntoMapView())
+      this.ajusterFichePopupDansConteneurCarte()
     })
-  }
-
-  /**
-   * Garde la fiche dans le cadre du conteneur carte (même logique séquentielle que Leaflet `_adjustPan`),
-   * avec la même marge confort que `autoPanPadding` (~40–80 px).
-   */
-  nudgeFichePopupIntoMapView() {
-    if (!this._map || !this.fichePopupIsOpen() || !this.L) return
-    const c = this._map.getContainer()
-    const el = c.querySelector(".leaflet-popup.lake-leaflet-popup--fiche")
-    if (!el) return
-    const m = this.fichePopupComfortMarginPx()
-    const w = c.clientWidth
-    const h = c.clientHeight
-    const cr = c.getBoundingClientRect()
-    try {
-      for (let step = 0; step < 8; step++) {
-        const pr = el.getBoundingClientRect()
-        const posX = pr.left - cr.left
-        const posY = pr.top - cr.top
-        const width = pr.width
-        const height = pr.height
-        let dx = 0
-        let dy = 0
-        if (posX + width + m > w) dx = posX + width - w + m
-        if (posX - dx < m) dx = posX - m
-        if (posY + height + m > h) dy = posY + height - h + m
-        if (posY - dy < m) dy = posY - m
-        if (dx === 0 && dy === 0) break
-        this._map.panBy(this.L.point(dx, dy), { animate: false })
-      }
-    } catch {
-      /* noop */
-    }
   }
 
   /** Clic sur la carte : panneau latéral + popup avec poissons / leurres. */
@@ -469,17 +518,12 @@ export default class extends Controller {
     const { skipFlyTo = false } = options
     this.selectLake(lake.id, { skipFlyTo })
     if (this._popup && this._map) {
-      this.syncFichePopupAutoPanPadding()
       this._popupLake = lake
       this._popup.setLatLng([lat, lng]).setContent(this.markerPopupHtml(lake)).openOn(this._map)
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          this.refitFichePopupInViewport()
-          this.bindLakeFichePopupInteractions()
-          window.setTimeout(() => this.refitFichePopupInViewport(), 0)
-          window.setTimeout(() => this.refitFichePopupInViewport(), 160)
-          window.setTimeout(() => this.refitFichePopupInViewport(), 360)
-        })
+        this.layoutLakeFichePopup()
+        this.bindLakeFichePopupInteractions()
+        window.setTimeout(() => this.reclampLakeFichePopupOnly(), 220)
       })
     }
   }
@@ -505,7 +549,8 @@ export default class extends Controller {
       wrap.classList.remove("leaflet-popup-scrolled")
     }
     if (content) {
-      content.style.setProperty("max-height", "min(620px, calc(100dvh - 96px))", "important")
+      const cap = this.fichePopupMaxContentHeightPx()
+      content.style.setProperty("max-height", `${cap}px`, "important")
       content.style.setProperty("overflow", "hidden", "important")
       content.style.setProperty("padding", "0", "important")
       content.style.setProperty("display", "flex", "important")
@@ -575,9 +620,9 @@ export default class extends Controller {
       }
 
       requestAnimationFrame(() => {
-        this.refitFichePopupInViewport()
+        this.layoutLakeFichePopup()
         syncCarouselNav()
-        window.setTimeout(() => this.refitFichePopupInViewport(), 80)
+        window.setTimeout(() => this.reclampLakeFichePopupOnly(), 80)
       })
     }
 
@@ -1093,7 +1138,7 @@ export default class extends Controller {
     const species = lake.fish_species || []
     const rawDesc = String(lake.description || "").trim()
     const teaser =
-      rawDesc.length > 160 ? `${rawDesc.slice(0, 157).trim()}…` : rawDesc || "Aucune description pour ce lac."
+      rawDesc.length > 120 ? `${rawDesc.slice(0, 117).trim()}…` : rawDesc || "Aucune description pour ce lac."
 
     const where = String(lake.location_label || "").trim()
     const whereHtml = where
@@ -1153,10 +1198,6 @@ export default class extends Controller {
             .join("")
         : `<p class="lake-fiche-popup__empty">Aucune espèce : les leurres par poisson ne sont pas disponibles.</p>`
 
-    const traitsIntro = this.escapeHtml(
-      "Sélectionnez un poisson ci-dessus pour afficher ses leurres recommandés et un descriptif adapté."
-    )
-
     const luresSectionBody =
       species.length > 0
         ? `<div class="lake-fiche-popup__lures-callout" data-lures-hint role="note">
@@ -1207,15 +1248,6 @@ export default class extends Controller {
           <h4 class="lake-fiche-popup__h lake-fiche-popup__h--profile lake-fiche-popup__h--dynamic"><span data-lures-heading>${lureHeading}</span></h4>
           ${luresSectionBody}
         </section>
-        <section class="lake-fiche-popup__section lake-fiche-popup__section--traits lake-fiche-popup__section--profile" aria-label="Conseils">
-          <h4 class="lake-fiche-popup__h lake-fiche-popup__h--profile">Conseils</h4>
-          <p class="lake-fiche-popup__traits lake-fiche-popup__traits--profile">${traitsIntro}</p>
-        </section>
-        <div class="lake-fiche-popup__footer-icons" aria-hidden="true">
-          <span class="lake-fiche-popup__footer-ico" title="Carte">🗺️</span>
-          <span class="lake-fiche-popup__footer-ico" title="Poissons">🐟</span>
-          <span class="lake-fiche-popup__footer-ico" title="Leurres">🎣</span>
-        </div>
       </div>
     </div>`
   }
