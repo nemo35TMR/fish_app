@@ -1,6 +1,9 @@
 /* Permet aux enfants flex (ex. carte) d’avoir une hauteur autre que « contenu » / auto. */
 body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   min-height: 0;
+  /* Sans ça, la largeur « intrinsèque » de Leaflet peut forcer main + page plus larges que la fenêtre → carte par-dessus la colonne droite. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .lakes-map-page {
@@ -8,6 +11,8 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   width: 100%;
   overflow: hidden;
 }
@@ -23,8 +28,7 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-/* Contexte d’empilement unique : la carte reste au fond (z-index 0), le panneau au-dessus (z-index 1),
-   quelle que soit la pile interne Leaflet (pannes 400–700). */
+/* Contexte d’empilement : carte z-index 0, panneau au-dessus (z-index élevé pour couvrir tout calque Leaflet). */
 .lakes-map-page__layout {
   position: relative;
   z-index: 0;
@@ -33,10 +37,16 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
 
   @media (min-width: 992px) {
-    flex-direction: row;
+    /* Deux colonnes sans min() Sass (SassC) : clamp en CSS brut. Colonne carte = minmax(0,1fr) pour forcer min-width 0. */
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) unquote("clamp(300px, 38vw, 420px)");
+    grid-template-rows: minmax(0, 1fr);
     align-items: stretch;
+    column-gap: 0;
   }
 }
 
@@ -49,22 +59,26 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   min-width: 0;
   max-width: 100%;
   min-height: 42vh;
-  overflow-x: hidden;
-  overflow-y: visible;
+  /* hidden : les tuiles Leaflet (transforms au zoom) doivent être rognées ; visible faisait « exploser » la carte hors du cadre. */
+  overflow: hidden;
 
   @media (min-width: 992px) {
     min-height: 0;
     flex: 1 1 0;
+    width: 100%;
+    max-width: 100%;
+    justify-self: stretch;
   }
 }
 
-/* overflow visible : sinon la fiche Leaflet est découpée en bas (overflow hidden sur le conteneur). */
+/* Même logique que leaflet.css : overflow hidden sur le conteneur pour borner tuiles / calques au zoom.
+   Fiche popup : recadrage côté JS (layoutLakeFichePopup / reclamp) si près des bords. */
 .lakes-map-page__map-inner {
   position: absolute;
   inset: 0;
   min-height: 360px;
   border-radius: 0;
-  overflow: visible;
+  overflow: hidden;
 
   .leaflet-container {
     font-family: inherit;
@@ -72,12 +86,10 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
     width: 100%;
     z-index: auto;
     outline: none;
-    overflow: visible;
+    overflow: hidden;
   }
 
-  .leaflet-tile-pane {
-    filter: saturate(1.02);
-  }
+  /* Pas de filter ici : sur WebKit/Blink un filter sur la pane peut étendre une couche de composition au-delà d’overflow:hidden et recouvrir la colonne droite. */
 
   @media (min-width: 992px) {
     border-radius: 0 0 0.5rem 0;
@@ -1020,7 +1032,7 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 /* Scroll interne au panneau : évite scrollIntoView sur tout le document (effet « la page descend »). */
 .lakes-map-page__panel {
   position: relative;
-  z-index: 1;
+  z-index: 20;
   isolation: isolate;
   flex: 1;
   min-width: 0;
@@ -1029,17 +1041,23 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   background: var(--bs-body-bg, #f8f9fa);
+  /* Couvre toute intersection avec la carte (tuiles / ombres) même si un calque déborde encore. */
+  box-shadow: -8px 0 0 0 var(--bs-body-bg, #f8f9fa);
 
   @media (max-width: 991.98px) {
     max-height: calc(100dvh - 128px);
+    z-index: 2;
+    box-shadow: none;
   }
 
   @media (min-width: 992px) {
-    flex: 0 0 420px;
-    flex-shrink: 0;
-    max-width: 38vw;
+    z-index: 1200;
     max-height: calc(100vh - 200px);
     padding: 1rem;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    justify-self: stretch;
   }
 }
 

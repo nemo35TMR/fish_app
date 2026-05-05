@@ -108,6 +108,7 @@ export default class extends Controller {
       }
     }
     this._boundPopupContentUpdate = null
+    this.disconnectLakeMapLayoutObserver()
     if (this._popup && this._map) {
       try {
         this._map.closePopup(this._popup)
@@ -183,11 +184,13 @@ export default class extends Controller {
   scheduleMapResize() {
     if (!this._map) return
     requestAnimationFrame(() => {
+      this.capDesktopMapColumnWidth()
       this._map.invalidateSize()
       if (this.fichePopupIsOpen()) {
         this.layoutLakeFichePopup()
       }
       window.setTimeout(() => {
+        this.capDesktopMapColumnWidth()
         this._map?.invalidateSize()
         if (this.fichePopupIsOpen()) {
           this.layoutLakeFichePopup()
@@ -252,9 +255,59 @@ export default class extends Controller {
     this._map.on("zoomend", this._boundLakeZoomEndAdjustPopup)
 
     this._map.whenReady(() => {
+      this.observeLakeMapLayoutResize()
       this.scheduleMapResize()
       this.loadLakesFromServer()
     })
+  }
+
+  /**
+   * Desktop : borne la largeur de `.lakes-map-page__map` pour que Leaflet lise un `clientWidth` correct
+   * (sinon la carte peut s’initialiser / rester à la largeur du viewport et recouvrir le panneau).
+   */
+  capDesktopMapColumnWidth() {
+    const layout = this.element.querySelector(".lakes-map-page__layout")
+    const mapShell = this.mapContainerTarget?.closest?.(".lakes-map-page__map")
+    const panel = this.element.querySelector(".lakes-map-page__panel")
+    if (!layout || !mapShell || !panel) return
+
+    const desktop = window.matchMedia("(min-width: 992px)").matches
+    if (!desktop) {
+      mapShell.style.removeProperty("max-width")
+      return
+    }
+
+    const lw = layout.getBoundingClientRect().width
+    const pw = panel.getBoundingClientRect().width
+    const cap = Math.max(120, Math.floor(lw - pw - 1))
+    mapShell.style.maxWidth = `${cap}px`
+  }
+
+  /** ResizeObserver sur le layout : recalcule la colonne carte + Leaflet.invalidateSize(). */
+  observeLakeMapLayoutResize() {
+    this.disconnectLakeMapLayoutObserver()
+    const layout = this.element.querySelector(".lakes-map-page__layout")
+    if (!layout || typeof ResizeObserver === "undefined") return
+    this._lakesLayoutResizeObserver = new ResizeObserver(() => {
+      this.capDesktopMapColumnWidth()
+      if (this._map) this._map.invalidateSize()
+    })
+    this._lakesLayoutResizeObserver.observe(layout)
+  }
+
+  disconnectLakeMapLayoutObserver() {
+    if (this._lakesLayoutResizeObserver) {
+      try {
+        this._lakesLayoutResizeObserver.disconnect()
+      } catch {
+        /* noop */
+      }
+      this._lakesLayoutResizeObserver = null
+    }
+    const mapShell = this.hasMapContainerTarget
+      ? this.mapContainerTarget.closest(".lakes-map-page__map")
+      : this.element.querySelector(".lakes-map-page__map")
+    if (mapShell) mapShell.style.removeProperty("max-width")
   }
 
   lakesUrl() {
