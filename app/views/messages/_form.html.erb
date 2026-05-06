@@ -1,0 +1,4 @@
+<%= form_with model: [chat, message] do |f| %>
+  <%= f.text_field :content, placeholder: "Pose ta question..." %>
+  <%= f.submit "Envoyer" %>
+<% end %>

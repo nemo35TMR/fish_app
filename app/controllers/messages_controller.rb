@@ -1,80 +1,57 @@
-# frozen_string_literal: true
-
 class MessagesController < ApplicationController
-  before_action :set_chat
-
   def create
-    @chat = current_user.chats.find(params[:chat_id])
+    @chat = Chat.find(params[:chat_id])
 
-    # message utilisateur
-    @message = Message.new(message_params)
-    @message.chat = @chat
-    @message.role = "user"
+    @message = @chat.messages.create!(
+      role: "user",
+      content: params[:message][:content]
+    )
 
-    if @message.save
+    @assistant_message = @chat.messages.create!(
+      role: "assistant",
+      content: ""
+    )
 
-      ruby_llm_chat = RubyLLM.chat(model: "gpt-4o-mini")
+    ask_llm
 
-      response = ruby_llm_chat
-                 .with_instructions(instructions)
-                 .ask(@message.content)
-
-      # réponse IA
-      Message.create!(
-        role: "assistant",
-        content: response.content,
-        chat: @chat
-      )
-      @chat.generate_title_from_first_message
-
-      redirect_to chat_path(@chat)
-    else
-      render "chats/show", status: :unprocessable_entity
+    respond_to do |format|
+      format.turbo_stream
+      format.html { redirect_to chat_path(@chat) }
     end
-  end
-
-  SYSTEM_PROMPT = <<~PROMPT
-    You are a fishing expert.
-
-    You help users improve their fishing skills.
-
-    You give advice about:
-    - fishing techniques
-    - best lures
-    - fish behavior
-
-    Answer clearly and concisely in Markdown.
-  PROMPT
-
-  def lake_context
-    lake = @chat.lake
-
-    <<~TEXT
-      The user is asking about this lake:
-      Name: #{lake.name}
-      Location: #{lake.location}
-      Description: #{lake.description}
-    TEXT
-  end
-
-  def instructions
-    [SYSTEM_PROMPT, lake_context].join("\n\n")
   end
 
   private
 
-  def set_chat
-    @chat = current_user.chats.find(params[:chat_id])
+  def ask_llm
+    @ruby_llm_chat = RubyLLM.chat
+
+    build_conversation_history
+
+    @ruby_llm_chat.ask(@message.content) do |chunk|
+      next if chunk.content.blank?
+
+      # 🔥 IMPORTANT
+      @assistant_message.update!(
+        content: @assistant_message.content + chunk.content
+      )
+
+      broadcast_replace(@assistant_message)
+    end
   end
 
-  def message_params
-    params.require(:message).permit(:content)
+  def build_conversation_history
+    @chat.messages.each do |message|
+      next if message.content.blank?
+      @ruby_llm_chat.add_message(message)
+    end
   end
 
-  def maybe_append_ai_reply
-    text = Ai::ChatResponder.reply_after_user_message(@message)
-    return if text.blank?
-
-    @chat.messages.create!(content: text)
+  def broadcast_replace(message)
+    Turbo::StreamsChannel.broadcast_replace_to(
+      @chat,
+      target: helpers.dom_id(message),
+      partial: "messages/message",
+      locals: { message: message }
+    )
   end
 end
