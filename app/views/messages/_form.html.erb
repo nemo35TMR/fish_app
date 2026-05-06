@@ -1,4 +1,13 @@
-<%= form_with model: [chat, message] do |f| %>
-  <%= f.text_field :content, placeholder: "Pose ta question..." %>
-  <%= f.submit "Envoyer" %>
+<%= form_with model: [chat, message], class: "chat-input-form" do |f| %>
+  <div class="chat-input-group">
+
+    <%= f.text_field :content,
+        placeholder: "Écrire un message...",
+        class: "chat-input",
+        autocomplete: "off",
+        required: true %>
+
+    <%= f.submit "Envoyer", class: "chat-send-button" %>
+
+  </div>
 <% end %>
