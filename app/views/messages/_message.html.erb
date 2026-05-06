@@ -1,0 +1,9 @@
+<div id="<%= dom_id(message) %>">
+  <% if message.role == "user" %>
+    <p><strong>Toi:</strong> <%= message.content %></p>
+  <% else %>
+    <p><strong>AI:</strong>
+      <%= message.content.present? ? message.content : "..." %>
+    </p>
+  <% end %>
+</div>
