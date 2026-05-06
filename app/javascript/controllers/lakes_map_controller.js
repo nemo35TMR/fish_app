@@ -94,9 +94,13 @@ export default class extends Controller {
     if (this._map && this._boundLakeZoomEndAdjustPopup) {
       this._map.off("zoomend", this._boundLakeZoomEndAdjustPopup)
     }
+    if (this._map && this._boundMapMoveEndInvalidate) {
+      this._map.off("moveend", this._boundMapMoveEndInvalidate)
+    }
     this._boundLakeFichePopupOpen = null
     this._boundLakeFichePopupClose = null
     this._boundLakeZoomEndAdjustPopup = null
+    this._boundMapMoveEndInvalidate = null
     this._popupLake = null
     this._fishPickAbort?.abort()
     this._fishPickAbort = null
@@ -184,13 +188,13 @@ export default class extends Controller {
   scheduleMapResize() {
     if (!this._map) return
     requestAnimationFrame(() => {
-      this.capDesktopMapColumnWidth()
+      this.clearStaleMapShellMaxWidth()
       this._map.invalidateSize()
       if (this.fichePopupIsOpen()) {
         this.layoutLakeFichePopup()
       }
       window.setTimeout(() => {
-        this.capDesktopMapColumnWidth()
+        this.clearStaleMapShellMaxWidth()
         this._map?.invalidateSize()
         if (this.fichePopupIsOpen()) {
           this.layoutLakeFichePopup()
@@ -254,6 +258,11 @@ export default class extends Controller {
     }
     this._map.on("zoomend", this._boundLakeZoomEndAdjustPopup)
 
+    this._boundMapMoveEndInvalidate = () => {
+      if (this._map) this._map.invalidateSize()
+    }
+    this._map.on("moveend", this._boundMapMoveEndInvalidate)
+
     this._map.whenReady(() => {
       this.observeLakeMapLayoutResize()
       this.scheduleMapResize()
@@ -261,41 +270,33 @@ export default class extends Controller {
     })
   }
 
-  /**
-   * Desktop : borne la largeur de `.lakes-map-page__map` pour que Leaflet lise un `clientWidth` correct
-   * (sinon la carte peut s’initialiser / rester à la largeur du viewport et recouvrir le panneau).
-   */
-  capDesktopMapColumnWidth() {
-    const layout = this.element.querySelector(".lakes-map-page__layout")
-    const mapShell = this.mapContainerTarget?.closest?.(".lakes-map-page__map")
-    const panel = this.element.querySelector(".lakes-map-page__panel")
-    if (!layout || !mapShell || !panel) return
-
-    const desktop = window.matchMedia("(min-width: 992px)").matches
-    if (!desktop) {
-      mapShell.style.removeProperty("max-width")
-      return
-    }
-
-    const lw = layout.getBoundingClientRect().width
-    const pw = panel.getBoundingClientRect().width
-    const cap = Math.max(120, Math.floor(lw - pw - 1))
-    mapShell.style.maxWidth = `${cap}px`
+  /** Retire un éventuel max-width inline (anciennes versions) : le layout desktop est géré en CSS (table). */
+  clearStaleMapShellMaxWidth() {
+    const mapShell = this.mapContainerTarget?.closest?.(".lakes-map-page__map") ?? this.element.querySelector(".lakes-map-page__map")
+    if (mapShell) mapShell.style.removeProperty("max-width")
   }
 
-  /** ResizeObserver sur le layout : recalcule la colonne carte + Leaflet.invalidateSize(). */
+  /** ResizeObserver sur le layout : invalidateSize différé (évite les rafales pendant zoom/pan). */
   observeLakeMapLayoutResize() {
     this.disconnectLakeMapLayoutObserver()
     const layout = this.element.querySelector(".lakes-map-page__layout")
     if (!layout || typeof ResizeObserver === "undefined") return
     this._lakesLayoutResizeObserver = new ResizeObserver(() => {
-      this.capDesktopMapColumnWidth()
-      if (this._map) this._map.invalidateSize()
+      this.clearStaleMapShellMaxWidth()
+      if (this._layoutResizeInvalidateTimer) window.clearTimeout(this._layoutResizeInvalidateTimer)
+      this._layoutResizeInvalidateTimer = window.setTimeout(() => {
+        this._layoutResizeInvalidateTimer = null
+        if (this._map) this._map.invalidateSize()
+      }, 120)
     })
     this._lakesLayoutResizeObserver.observe(layout)
   }
 
   disconnectLakeMapLayoutObserver() {
+    if (this._layoutResizeInvalidateTimer) {
+      window.clearTimeout(this._layoutResizeInvalidateTimer)
+      this._layoutResizeInvalidateTimer = null
+    }
     if (this._lakesLayoutResizeObserver) {
       try {
         this._lakesLayoutResizeObserver.disconnect()
