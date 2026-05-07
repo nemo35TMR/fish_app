@@ -547,6 +547,19 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   gap: 0.5rem;
 }
 
+.lake-fiche-popup .lake-panel__fish-card[data-fish-id] {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* Sans cela, le navigateur démarre un glisser-déposer sur l’image et le clic ne sélectionne pas l’espèce. */
+.lake-fiche-popup .lake-panel__fish-thumb img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
 .lake-fiche-popup__section--lures-panel.lake-fiche-popup__section--lures {
   background: #fafbfc;
   border-color: #e2e8f0;

@@ -224,7 +224,7 @@ export default class extends Controller {
       if (e.popup !== this._popup) return
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          this._popup?.update?.()
+          /* Pas de this._popup.update() : _updateContent réécrit innerHTML et casse les listeners. */
           this.applyFichePopupLayoutLock()
           /* Poissons du popup : liaison ici (événement Leaflet) pour que le DOM soit toujours prêt. */
           this.bindLakeFichePopupInteractions()
@@ -410,22 +410,30 @@ export default class extends Controller {
     }
   }
 
-  /** Nœud racine de la fiche dans le DOM Leaflet (getElement() absent selon versions). */
+  /** Boîtier `.leaflet-popup` du popup fiche (même instance que `this._popup`). */
+  lakeFichePopupShell() {
+    if (!this._popup) return null
+    const el = typeof this._popup.getElement === "function" ? this._popup.getElement() : null
+    if (el) return el
+    return this._map?.getContainer?.()?.querySelector?.(".leaflet-popup.lake-leaflet-popup--fiche") ?? null
+  }
+
+  /** Nœud racine de la fiche (contenu métier) à l’intérieur du popup Leaflet. */
   lakeFichePopupRoot() {
-    if (!this._map) return null
-    return this._map.getContainer().querySelector(".leaflet-popup.lake-leaflet-popup--fiche .lake-fiche-popup")
+    const shell = this.lakeFichePopupShell()
+    if (!shell) return null
+    return shell.querySelector("[data-lake-fiche-root]") || shell.querySelector(".lake-fiche-popup")
   }
 
   /** Conteneur `.leaflet-popup-content` de notre popup (hauteur / overflow forcés : pas de scroll Leaflet). */
   lakeFichePopupContentEl() {
-    if (!this._map) return null
-    const wrap = this._map.getContainer().querySelector(".leaflet-popup.lake-leaflet-popup--fiche")
-    return wrap?.querySelector?.(".leaflet-popup-content") || null
+    const shell = this.lakeFichePopupShell()
+    return shell?.querySelector?.(".leaflet-popup-content") ?? null
   }
 
   /** Empêche Leaflet d’ajouter un scroll interne (classe `leaflet-popup-scrolled`) + borne la hauteur. */
   applyFichePopupLayoutLock() {
-    const wrap = this._map?.getContainer?.()?.querySelector?.(".leaflet-popup.lake-leaflet-popup--fiche")
+    const wrap = this.lakeFichePopupShell()
     const content = this.lakeFichePopupContentEl()
     if (wrap) {
       wrap.classList.remove("leaflet-popup-scrolled")
@@ -442,8 +450,9 @@ export default class extends Controller {
   /** Après ouverture : poissons (grille comme panneau droit), sélection → leurres + conseils. */
   bindLakeFichePopupInteractions() {
     const lake = this._popupLake
+    const shell = this.lakeFichePopupShell()
     const root = this.lakeFichePopupRoot()
-    if (!lake || !root) return
+    if (!lake || !shell || !root) return
 
     this._fishPickAbort?.abort()
     this._fishPickAbort = new AbortController()
@@ -451,9 +460,6 @@ export default class extends Controller {
     const track = root.querySelector(".lake-fiche-popup__carousel-track")
     const prev = root.querySelector(".lake-fiche-popup__carousel-btn--prev")
     const next = root.querySelector(".lake-fiche-popup__carousel-btn--next")
-    const traitsEl = root.querySelector(".lake-fiche-popup__traits")
-    const headingEl = root.querySelector("[data-lures-heading]")
-
     const scrollAmount = () => Math.min(160, Math.max(96, (track?.clientWidth || 160) * 0.75))
 
     const syncCarouselNav = () => {
@@ -489,55 +495,74 @@ export default class extends Controller {
       const sid = String(fishId).trim()
       if (!sid) return
 
-      root.classList.add("lake-fiche-popup--lures-revealed")
+      const lakeLive = this._popupLake
+      const liveRoot = this.lakeFichePopupRoot() || root
+      if (!lakeLive || !liveRoot) return
 
-      root.querySelectorAll(".lake-panel__fish-card[data-fish-id]").forEach((b) => {
+      liveRoot.classList.add("lake-fiche-popup--lures-revealed")
+
+      liveRoot.querySelectorAll(".lake-panel__fish-card[data-fish-id]").forEach((b) => {
         const active = String(b.dataset.fishId) === sid
         b.classList.toggle("lake-panel__fish-card--selected", active)
         b.setAttribute("aria-pressed", String(active))
       })
 
-      const fs = (lake.fish_species || []).find((s) => String(s.id) === sid)
-      const slot = root.querySelector("[data-lures-grid-slot]")
+      const fs = (lakeLive.fish_species || []).find((s) => String(s.id) === sid)
+      const slot = liveRoot.querySelector("[data-lures-grid-slot]")
+      const headingLive = liveRoot.querySelector("[data-lures-heading]")
+      const traitsLive = liveRoot.querySelector(".lake-fiche-popup__traits")
       if (slot) {
         slot.removeAttribute("hidden")
         slot.innerHTML = this.lurePanelListHtml(fs?.lures)
       }
-      if (headingEl && fs) headingEl.textContent = `Leurres — ${fs.name}`
+      if (headingLive && fs) headingLive.textContent = `Leurres — ${fs.name}`
       const idNum = Number(sid)
-      if (traitsEl && Number.isFinite(idNum)) {
-        const full = this.lakeCharacteristicsBlurbForFish(lake, idNum)
-        traitsEl.textContent = full.length > 380 ? `${full.slice(0, 377).trim()}…` : full
+      if (traitsLive && Number.isFinite(idNum)) {
+        const full = this.lakeCharacteristicsBlurbForFish(lakeLive, idNum)
+        traitsLive.textContent = full.length > 380 ? `${full.slice(0, 377).trim()}…` : full
       }
 
       requestAnimationFrame(() => {
-        this._popup?.update?.()
+        /* Ne pas appeler this._popup.update() ici : Leaflet réinjecte tout le HTML
+         * depuis la chaîne initiale (_updateContent → innerHTML), ce qui efface
+         * la sélection / les leurres et détruit les listeners posés sur la racine. */
         this.applyFichePopupLayoutLock()
         syncCarouselNav()
         slot?.scrollIntoView?.({ block: "nearest", behavior: "smooth" })
       })
     }
 
-    /* Délégation en phase capture : le clic atteint le poisson avant d’être absorbé par la carte / Leaflet. */
+    const fishTargetFromEvent = (ev) => {
+      const t = ev.target
+      if (!(t instanceof Element)) return null
+      const r = this.lakeFichePopupRoot() || root
+      if (!r) return null
+      const btn = t.closest(".lake-panel__fish-card[data-fish-id]")
+      if (!btn || !r.contains(btn)) return null
+      return { btn, r }
+    }
+
+    /* Délégation sur le boîtier Leaflet, phase bubble : évite les conflits avec la capture
+     * et les images « draggable » qui avalent le clic (glisser-déposer natif). */
     const onFishPickClick = (ev) => {
       if (ev.type === "click" && ev.button !== 0) return
-      const btn = ev.target.closest(".lake-panel__fish-card[data-fish-id]")
-      if (!btn || !root.contains(btn)) return
+      const hit = fishTargetFromEvent(ev)
+      if (!hit) return
       ev.preventDefault()
       ev.stopPropagation()
-      applyFishSelection(btn.getAttribute("data-fish-id"))
+      applyFishSelection(hit.btn.getAttribute("data-fish-id"))
     }
-    root.addEventListener("click", onFishPickClick, { capture: true, signal: sig })
+    shell.addEventListener("click", onFishPickClick, { signal: sig })
 
     const onFishPickKey = (ev) => {
       if (ev.key !== "Enter" && ev.key !== " ") return
-      const btn = ev.target.closest(".lake-panel__fish-card[data-fish-id]")
-      if (!btn || !root.contains(btn)) return
+      const hit = fishTargetFromEvent(ev)
+      if (!hit) return
       if (ev.key === " ") ev.preventDefault()
       ev.stopPropagation()
-      applyFishSelection(btn.getAttribute("data-fish-id"))
+      applyFishSelection(hit.btn.getAttribute("data-fish-id"))
     }
-    root.addEventListener("keydown", onFishPickKey, { capture: true, signal: sig })
+    shell.addEventListener("keydown", onFishPickKey, { signal: sig })
   }
 
   scrollLakeDetailsIntoView() {
@@ -729,7 +754,7 @@ export default class extends Controller {
       const fishSrc = this.fishSpeciesImageUrl(fs)
       card.innerHTML = `
         <div class="lake-panel__fish-thumb">
-          <img src="${fishSrc}" alt="" width="48" height="48" loading="lazy" decoding="async" />
+          <img src="${fishSrc}" alt="" width="48" height="48" loading="lazy" decoding="async" draggable="false" />
         </div>
         <span class="lake-panel__fish-name">${this.escapeHtml(fs.name)}</span>
       `
@@ -983,7 +1008,7 @@ export default class extends Controller {
         return `<li class="list-group-item lure-item lake-panel__lure-item py-2">
           <div class="lake-panel__lure-row">
             <div class="lake-panel__lure-thumb">
-              <img src="${lureSrc}" alt="" width="40" height="40" loading="lazy" decoding="async" />
+              <img src="${lureSrc}" alt="" width="40" height="40" loading="lazy" decoding="async" draggable="false" />
             </div>
             <div class="lake-panel__lure-body">
               <div class="fw-semibold">${this.escapeHtml(lure.name)}</div>
@@ -1016,7 +1041,7 @@ export default class extends Controller {
 
     const firstFish = species[0]
     const avatarInner = firstFish
-      ? `<img src="${this.fishSpeciesImageUrl(firstFish)}" alt="" width="56" height="56" loading="lazy" decoding="async" />`
+      ? `<img src="${this.fishSpeciesImageUrl(firstFish)}" alt="" width="56" height="56" loading="lazy" decoding="async" draggable="false" />`
       : `<span class="lake-fiche-popup__avatar-emoji" aria-hidden="true">🌊</span>`
 
     const lureHeading = this.escapeHtml("Leurres recommandés")
@@ -1028,7 +1053,7 @@ export default class extends Controller {
                   const img = this.fishSpeciesImageUrl(fs)
                   return `<button type="button" class="lake-panel__fish-card lake-fiche-popup__fish-pick" data-fish-id="${fs.id}" aria-pressed="false" aria-label="Afficher les leurres pour ${this.escapeHtml(fs.name)}">
               <div class="lake-panel__fish-thumb">
-                <img src="${img}" alt="" width="48" height="48" loading="lazy" decoding="async" />
+                <img src="${img}" alt="" width="48" height="48" loading="lazy" decoding="async" draggable="false" />
               </div>
               <span class="lake-panel__fish-name">${this.escapeHtml(fs.name)}</span>
             </button>`
@@ -1058,7 +1083,7 @@ export default class extends Controller {
         </div>`
         : `<p class="lake-fiche-popup__empty">Aucune espèce : les leurres par poisson ne sont pas disponibles.</p>`
 
-    return `<div class="lake-fiche-popup lake-fiche-popup--profile" role="region" aria-label="Fiche lac">
+    return `<div class="lake-fiche-popup lake-fiche-popup--profile" data-lake-fiche-root role="region" aria-label="Fiche lac">
       <div class="lake-fiche-popup__top">
         <div class="lake-fiche-popup__hero" aria-hidden="true">
           <div class="lake-fiche-popup__hero-sky"></div>
