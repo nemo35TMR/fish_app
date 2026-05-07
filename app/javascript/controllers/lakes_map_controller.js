@@ -199,9 +199,11 @@ export default class extends Controller {
       className: "lake-leaflet-popup lake-leaflet-popup--fiche",
       maxWidth: 320,
       minWidth: 240,
-      autoPan: true,
-      keepInView: true,
-      autoPanPadding: this.L.point(20, 20)
+      /* Pas de déplacement de la carte : la bulle reste ancrée au lac (Leaflet défaut : au-dessus du point). */
+      autoPan: false,
+      keepInView: false,
+      /* Légère élévation au-dessus du point (défaut Leaflet [0,7]) pour dégager le marqueur. */
+      offset: this.L.point(0, 12)
     })
 
     this._popupLake = null
@@ -380,7 +382,7 @@ export default class extends Controller {
 
   /** Clic sur la carte : panneau latéral + popup avec poissons / leurres. */
   openLakeFromMap(lake, lat, lng) {
-    this.selectLake(lake.id)
+    this.selectLake(lake.id, { skipMapFly: true })
     if (this._popup && this._map) {
       this._popupLake = lake
       this._popup.setLatLng([lat, lng]).setContent(this.markerPopupHtml(lake)).openOn(this._map)
@@ -659,7 +661,8 @@ export default class extends Controller {
     })
   }
 
-  selectLake(id) {
+  /** @param {{ skipMapFly?: boolean }} [opts] — si skipMapFly, ne pas flyTo (ex. clic carte / liste avec popup). */
+  selectLake(id, opts = {}) {
     const lake = this.lakes.find((l) => l.id === id) || this.markersById.get(id)?.lake
     if (!lake || !this._map) return
 
@@ -669,7 +672,7 @@ export default class extends Controller {
 
     const lng = Number(lake.longitude)
     const lat = Number(lake.latitude)
-    if (Number.isFinite(lng) && Number.isFinite(lat)) {
+    if (!opts.skipMapFly && Number.isFinite(lng) && Number.isFinite(lat)) {
       const z = Math.max(this._map.getZoom(), 8)
       this._map.flyTo([lat, lng], z, { duration: 0.65 })
     }

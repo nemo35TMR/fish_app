@@ -159,9 +159,8 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   overflow: visible !important;
 }
 
-.lake-leaflet-popup--fiche.leaflet-popup {
-  position: relative;
-}
+/* Ne pas surcharger position : Leaflet positionne .leaflet-popup en absolute (bottom/left).
+   « position: relative » cassait le placement : bulle qui glissait hors de la zone visible. */
 
 .lake-leaflet-popup--fiche a.leaflet-popup-close-button {
   top: 0.55rem;
