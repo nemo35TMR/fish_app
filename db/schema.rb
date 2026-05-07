@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_29_011139) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_06_011807) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -38,6 +38,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_29_011139) do
     t.datetime "created_at", null: false
     t.string "name"
     t.datetime "updated_at", null: false
+  end
+
+  create_table "fishing_plans", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "fish_species_id", null: false
+    t.bigint "lake_id", null: false
+    t.bigint "lure_id", null: false
+    t.text "notes"
+    t.string "status"
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["fish_species_id"], name: "index_fishing_plans_on_fish_species_id"
+    t.index ["lake_id"], name: "index_fishing_plans_on_lake_id"
+    t.index ["lure_id"], name: "index_fishing_plans_on_lure_id"
+    t.index ["user_id"], name: "index_fishing_plans_on_user_id"
   end
 
   create_table "lake_fishes", force: :cascade do |t|
@@ -104,6 +119,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_29_011139) do
   add_foreign_key "chats", "users"
   add_foreign_key "fish_lures", "fish_species", column: "fish_species_id"
   add_foreign_key "fish_lures", "lures"
+  add_foreign_key "fishing_plans", "fish_species", column: "fish_species_id"
+  add_foreign_key "fishing_plans", "lakes"
+  add_foreign_key "fishing_plans", "lures"
+  add_foreign_key "fishing_plans", "users"
   add_foreign_key "lake_fishes", "fish_species", column: "fish_species_id"
   add_foreign_key "lake_fishes", "lakes"
   add_foreign_key "messages", "chats"
