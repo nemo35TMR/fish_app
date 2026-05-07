@@ -23,6 +23,17 @@ class ChatsController < ApplicationController
     @message = Message.new
   end
 
+  def index
+    @chats = current_user.chats.includes(:lake).order(created_at: :desc)
+  end
+
+  def destroy
+    @chat = current_user.chats.find(params[:id])
+    @chat.destroy
+
+    redirect_to chats_path, notice: "Conversation supprimée."
+  end
+
   private
 
   def set_lake

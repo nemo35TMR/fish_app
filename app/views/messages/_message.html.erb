@@ -1,9 +1,17 @@
-<div id="<%= dom_id(message) %>">
+<div id="<%= dom_id(message) %>" class="message-row">
+
   <% if message.role == "user" %>
-    <p><strong>Toi:</strong> <%= message.content %></p>
+    <div class="message message-user">
+      <div class="message-content">
+        <%= simple_format(message.content) %>
+      </div>
+    </div>
   <% else %>
-    <p><strong>AI:</strong>
-      <%= message.content.present? ? message.content : "..." %>
-    </p>
+    <div class="message message-ai">
+      <div class="message-content">
+        <%= simple_format(message.content) %>
+      </div>
+    </div>
   <% end %>
+
 </div>
