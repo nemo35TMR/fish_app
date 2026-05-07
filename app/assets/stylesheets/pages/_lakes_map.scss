@@ -68,6 +68,14 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   }
 }
 
+.leaflet-marker-pane .lake-map-marker-wrap.leaflet-marker-icon,
+.leaflet-container .leaflet-marker-pane .lake-map-marker-wrap.leaflet-marker-icon {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
 .lake-map-marker-wrap {
   background: transparent !important;
   border: none !important;
@@ -91,21 +99,26 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.45);
 }
 
+/* Emoji seul : pas de disque coloré (ancien fond + border-radius). */
 .lake-map-marker__inner {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: #0ea5b7;
-  color: #fff;
-  font-size: 16px;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+  width: auto;
+  height: auto;
+  line-height: 1;
+  border-radius: 0;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: inherit;
+  font-size: 22px;
+  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.45));
 }
 
 .lake-map-marker--selected .lake-map-marker__inner {
-  background: #15803d;
+  background: transparent !important;
+  filter: drop-shadow(0 0 3px rgba(21, 128, 61, 0.85)) drop-shadow(0 1px 2px rgba(15, 23, 42, 0.4));
 }
 
 .lake-leaflet-popup .leaflet-popup-content-wrapper {
@@ -134,8 +147,9 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   padding: 0;
 }
 
+/* Marge horizontale nulle : la bannière ciel (hero) va bord à bord de la fiche. Marge verticale seulement pour le détachement de la carte / la pointe du popup. */
 .lake-leaflet-popup--fiche .leaflet-popup-content {
-  margin: 6px 8px;
+  margin: 10px 0 12px;
   /* SassC interprète min() comme une fonction Sass : largeur = 320px plafonnée par le viewport. */
   width: 320px !important;
   max-width: calc(100vw - 28px) !important;
@@ -215,7 +229,8 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 }
 
 .lake-fiche-popup__hero {
-  height: 4.5rem;
+  height: 5rem;
+  width: 100%;
   border-radius: 24px 24px 0 0;
   overflow: hidden;
 }
@@ -223,7 +238,8 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 .lake-fiche-popup__hero-sky {
   height: 100%;
   width: 100%;
-  background: linear-gradient(165deg, #38bdf8 0%, #7dd3fc 38%, #bae6fd 72%, #e0f2fe 100%);
+  min-width: 100%;
+  background: linear-gradient(165deg, #0ea5e9 0%, #38bdf8 32%, #7dd3fc 58%, #bae6fd 82%, #e0f2fe 100%);
 }
 
 .lake-fiche-popup__avatar-stage {
@@ -269,18 +285,27 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 .lake-fiche-popup__scroll {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 0 1rem 0.85rem;
+  padding: 0 1rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 1rem;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
+/* Sans flex-shrink: 0, un enfant avec min-height: 0 peut être écrasé par le layout flex et
+   son contenu déborde par-dessus le bloc suivant (ex. leurres / conseils). */
+.lake-fiche-popup__scroll > .lake-fiche-popup__body,
+.lake-fiche-popup__scroll > .lake-fiche-popup__section,
+.lake-fiche-popup__scroll > .lake-fiche-popup__footer-icons {
+  flex-shrink: 0;
+}
+
 .lake-fiche-popup__body {
   text-align: center;
   padding-top: 0.15rem;
+  padding-bottom: 0.25rem;
 }
 
 .lake-fiche-popup__eyebrow--profile {
@@ -338,7 +363,7 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   justify-content: space-between;
   gap: 0.35rem;
   padding: 0.65rem 0.5rem;
-  margin: 0 auto;
+  margin: 0.5rem auto 0;
   max-width: 17.5rem;
   width: 100%;
   border-radius: 14px;
@@ -380,7 +405,7 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 
 .lake-fiche-popup__section--profile {
   text-align: center;
-  padding: 0.55rem 0.5rem 0.6rem;
+  padding: 0.65rem 0.55rem 0.7rem;
   border-radius: 14px;
   border: 1px solid #e2e8f0;
   background: #fafbfc;
@@ -417,7 +442,8 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   display: flex;
   justify-content: center;
   gap: 1.25rem;
-  padding: 0.35rem 0 0.15rem;
+  padding: 0.5rem 0 0.25rem;
+  margin-top: 0.25rem;
   opacity: 0.75;
 }
 
@@ -503,14 +529,65 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
 }
 
 .lake-fiche-popup__section--lures {
-  min-height: 0;
   background: linear-gradient(145deg, rgba(255, 247, 237, 0.95) 0%, rgba(254, 252, 232, 0.88) 100%);
   border-color: rgba(245, 158, 11, 0.14);
+}
+
+/* Même présentation que le panneau droit (carte lac). */
+.lake-fiche-popup__section--fish-panel {
+  background: #fafbfc;
+  border-color: #e2e8f0;
+}
+
+.lake-fiche-popup__fish-section-title {
+  margin-bottom: 0.35rem;
+}
+
+.lake-fiche-popup__fish-grid.lake-panel__fish-grid {
+  gap: 0.5rem;
+}
+
+.lake-fiche-popup__section--lures-panel.lake-fiche-popup__section--lures {
+  background: #fafbfc;
+  border-color: #e2e8f0;
+}
+
+.lake-fiche-popup__panel-lures.lake-panel__lures-section {
+  margin-top: 0 !important;
+}
+
+.lake-fiche-popup__lures-below-title .lake-fiche-popup__lures-callout {
+  margin-top: 0.35rem;
+  margin-bottom: 0.45rem;
+}
+
+.lake-fiche-popup__lures-dynamic {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.lake-fiche-popup .lake-panel__lures-list.lake-fiche-popup__lures-list {
+  border-radius: 0 0 10px 10px;
 }
 
 .lake-fiche-popup__section--traits {
   background: linear-gradient(145deg, rgba(241, 245, 249, 0.98) 0%, rgba(248, 250, 252, 0.92) 100%);
   border-color: rgba(100, 116, 139, 0.12);
+}
+
+.lake-fiche-popup__section--lures.lake-fiche-popup__section--profile .lake-fiche-popup__h--profile {
+  margin-bottom: 0.65rem;
+}
+
+.lake-fiche-popup__section--profile .lake-fiche-popup__lures-callout {
+  margin-bottom: 0.55rem;
+}
+
+.lake-fiche-popup__section--traits.lake-fiche-popup__section--profile {
+  margin-top: 0.35rem;
 }
 
 .lake-fiche-popup__h {
@@ -678,6 +755,12 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   max-height: 34px !important;
 }
 
+.leaflet-container .leaflet-popup-pane .lake-leaflet-popup--fiche .lake-fiche-popup__row--lures-profile .lake-fiche-popup__img-wrap--lure img,
+.leaflet-container .leaflet-popup-pane .lake-leaflet-popup--fiche .lake-fiche-popup__row--lures-profile .lake-fiche-popup__lure-chip__media img {
+  max-width: 44px !important;
+  max-height: 44px !important;
+}
+
 .lake-fiche-popup__label {
   margin-top: 0.12rem;
   font-size: 0.5rem;
@@ -743,6 +826,8 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   -webkit-overflow-scrolling: touch;
   padding: 0.15rem 0.1rem;
   scrollbar-width: thin;
+  /* Permet le tap sur les boutons poisson sans que le navigateur traite le geste comme du scroll seul. */
+  touch-action: pan-x;
 }
 
 .lake-fiche-popup__carousel-btn {
@@ -807,6 +892,8 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   width: 3.85rem;
   max-width: 3.85rem;
   padding: 0.22rem 0.12rem 0.28rem;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   margin: 0;
   border: 2px solid rgba(15, 23, 42, 0.06);
   border-radius: 14px;
@@ -821,7 +908,6 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   appearance: none;
   color: inherit;
   pointer-events: auto;
-  touch-action: manipulation;
 }
 
 .lake-fiche-popup__fish-btn:hover {
@@ -915,46 +1001,111 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   display: none !important;
 }
 
-.lake-fiche-popup:not(.lake-fiche-popup--lures-revealed) .lake-fiche-popup__lure-panels {
-  display: none !important;
-  height: 0 !important;
-  max-height: 0 !important;
-  overflow: hidden !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: none !important;
-}
-
-/* Leurres : un seul panneau visible selon le poisson sélectionné */
-.lake-fiche-popup__lure-panels {
-  min-width: 0;
-}
-
-.lake-fiche-popup__lure-panel {
+.lake-fiche-popup__lures-dynamic[hidden] {
   display: none !important;
 }
 
-.lake-fiche-popup__lure-panel.is-active {
-  display: block !important;
+.leaflet-container .leaflet-popup-pane .lake-leaflet-popup--fiche .lake-fiche-popup .lake-panel__fish-thumb img {
+  max-width: 48px !important;
+  max-height: 48px !important;
+}
+
+.leaflet-container .leaflet-popup-pane .lake-leaflet-popup--fiche .lake-fiche-popup .lake-panel__lure-thumb img {
+  max-width: 40px !important;
+  max-height: 40px !important;
 }
 
 .lakes-map-page__panel {
   flex: 1;
   min-height: 0;
   padding: 0.75rem;
-  max-height: none;
+  display: flex;
+  flex-direction: column;
+  /* Le contenu reste dans la carte : pas de débordement sous la carte. */
+  overflow: hidden;
+  /* SassC : ne pas utiliser min() nu — il est interprété comme fonction Sass (vh vs px). */
+  max-height: #{"min(52vh, 520px)"};
 
   @media (min-width: 992px) {
     flex: 0 0 420px;
     max-width: 38vw;
     max-height: calc(100vh - 200px);
-    overflow: auto;
     padding: 1rem;
   }
 }
 
 .lakes-map-page__panel-card {
   transition: box-shadow 0.2s ease, transform 0.2s ease;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lakes-map-page__panel-card > .card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Zone défilante : liste des lacs fixe en haut, détails / poissons / leurres scrollent ici. */
+.lake-panel__body-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: 0.35rem;
+}
+
+.lake-panel__details {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.lake-panel__fish-section {
+  margin-bottom: 0.35rem;
+}
+
+.lake-panel__fish-hint {
+  margin-bottom: 0.65rem !important;
+}
+
+.lake-panel__lures-section {
+  margin-top: 0.85rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  background: #f8fafc;
+  min-width: 0;
+}
+
+.lake-panel__lures-section > .lake-panel__section-title {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
+  background: linear-gradient(100deg, #bfdbfe 0%, #dbeafe 28%, #e0f2fe 55%, #f8fafc 100%);
+  border-bottom: 1px solid rgba(14, 165, 233, 0.25);
+  border-radius: 0;
+}
+
+.lake-panel__lures-section .lake-panel__lures-list {
+  margin: 0;
+  border: none !important;
+  border-radius: 0;
+  max-height: none;
+}
+
+.lake-panel__chat-actions {
+  flex-shrink: 0;
 }
 
 .min-h-0 {
@@ -1024,6 +1175,9 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
+  max-width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
 }
 
 .lake-panel__fish-card {
@@ -1036,6 +1190,27 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   text-align: center;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  appearance: none;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lake-panel__fish-card:hover {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+
+.lake-panel__fish-card:focus-visible {
+  outline: 2px solid #0d6efd;
+  outline-offset: 2px;
+}
+
+.lake-panel__fish-card--selected {
+  border-color: #0d6efd;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px rgba(13, 110, 253, 0.2);
 }
 
 .lake-panel__fish-thumb {

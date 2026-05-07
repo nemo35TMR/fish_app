@@ -62,13 +62,13 @@
 
           <hr class="my-0 flex-shrink-0">
 
-          <div class="flex-grow-1 d-flex flex-column min-h-0">
+          <div class="flex-grow-1 d-flex flex-column min-h-0 lake-panel__body-scroll">
             <div data-lakes-map-target="emptyState" class="text-muted small lakes-map-page__fade">
               <p class="mb-2 fw-semibold text-body">Détails du lac</p>
               <p class="mb-0">Recherchez une ville ou utilisez votre position, puis sélectionnez un lac dans la liste ou sur la carte.</p>
             </div>
 
-            <div data-lakes-map-target="details" class="d-none lakes-map-page__fade flex-grow-1 d-flex flex-column min-h-0">
+            <div data-lakes-map-target="details" class="d-none lakes-map-page__fade lake-panel__details">
               <div class="d-flex justify-content-between align-items-start gap-2">
                 <h3 class="h5 mb-1 d-flex align-items-center gap-2 lake-panel__title">
                   <span class="lake-panel__title-icon" aria-hidden="true">🌊</span>
@@ -86,23 +86,24 @@
 
               <hr class="my-3">
 
-              <section>
+              <section class="lake-panel__fish-section">
                 <h4 class="lake-panel__section-title">
                   <span class="lake-panel__section-title-icon" aria-hidden="true">🐟</span>
                   <span>Poissons</span>
                 </h4>
+                <p class="small text-muted mb-2 lake-panel__fish-hint">Sélectionnez un poisson pour afficher les leurres recommandés.</p>
                 <div class="lake-panel__fish-grid" data-lakes-map-target="fishList"></div>
               </section>
 
-              <section class="mt-3 flex-grow-1 d-flex flex-column min-h-0">
+              <section class="lake-panel__lures-section d-none" data-lakes-map-target="fishLuresSection">
                 <h4 class="lake-panel__section-title">
                   <span class="lake-panel__section-title-icon" aria-hidden="true">🎣</span>
-                  <span>Leurres par espèce</span>
+                  <span data-lakes-map-target="fishLuresHeading">Leurres</span>
                 </h4>
-                <ul class="list-group list-group-flush border rounded small flex-grow-1 overflow-auto lake-panel__lures-list" data-lakes-map-target="luresList"></ul>
+                <ul class="list-group list-group-flush small lake-panel__lures-list" data-lakes-map-target="luresList"></ul>
               </section>
 
-              <div class="mt-3 pt-1 flex-shrink-0">
+              <div class="lake-panel__chat-actions mt-3 pt-1">
                   <% if user_signed_in? %>
                     <a href="#" class="btn btn-outline-primary btn-sm w-100 d-none" data-lakes-map-target="chatLink">
                       Ouvrir un chat sur ce lac

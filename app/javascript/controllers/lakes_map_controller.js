@@ -25,6 +25,8 @@ export default class extends Controller {
     "lakeDescription",
     "lakeLocation",
     "fishList",
+    "fishLuresSection",
+    "fishLuresHeading",
     "luresList",
     "emptyState",
     "details",
@@ -49,6 +51,12 @@ export default class extends Controller {
 
     this.prepareMapContainer()
     this.ensureLeafletCssLink()
+
+    this._handleFishCardActivation = this._handleFishCardActivation.bind(this)
+    if (this.hasDetailsTarget) {
+      this.detailsTarget.addEventListener("click", this._handleFishCardActivation)
+      this.detailsTarget.addEventListener("keydown", this._handleFishCardActivation)
+    }
 
     this.loadLeafletIfNeeded()
       .then(() => {
@@ -81,6 +89,11 @@ export default class extends Controller {
 
   disconnect() {
     this._connectGen += 1
+    if (this._handleFishCardActivation && this.hasDetailsTarget) {
+      this.detailsTarget.removeEventListener("click", this._handleFishCardActivation)
+      this.detailsTarget.removeEventListener("keydown", this._handleFishCardActivation)
+    }
+    this._handleFishCardActivation = null
     this.teardownMap()
   }
 
@@ -213,6 +226,9 @@ export default class extends Controller {
         requestAnimationFrame(() => {
           this._popup?.update?.()
           this.applyFichePopupLayoutLock()
+          /* Poissons du popup : liaison ici (événement Leaflet) pour que le DOM soit toujours prêt. */
+          this.bindLakeFichePopupInteractions()
+          window.setTimeout(() => this.applyFichePopupLayoutLock(), 0)
         })
       })
     }
@@ -386,14 +402,11 @@ export default class extends Controller {
     if (this._popup && this._map) {
       this._popupLake = lake
       this._popup.setLatLng([lat, lng]).setContent(this.markerPopupHtml(lake)).openOn(this._map)
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          this._popup?.update?.()
-          this.applyFichePopupLayoutLock()
-          this.bindLakeFichePopupInteractions()
-          window.setTimeout(() => this.applyFichePopupLayoutLock(), 0)
-        })
-      })
+      /* Complète popupopen + rAF : garantit le DOM puis la liaison clic poisson → leurres. */
+      window.setTimeout(() => {
+        this.applyFichePopupLayoutLock()
+        this.bindLakeFichePopupInteractions()
+      }, 0)
     }
   }
 
@@ -426,7 +439,7 @@ export default class extends Controller {
     }
   }
 
-  /** Après ouverture : carousel poissons, sélection → leurres + caractéristiques. */
+  /** Après ouverture : poissons (grille comme panneau droit), sélection → leurres + conseils. */
   bindLakeFichePopupInteractions() {
     const lake = this._popupLake
     const root = this.lakeFichePopupRoot()
@@ -454,36 +467,46 @@ export default class extends Controller {
       next.disabled = !overflow || atEnd
     }
 
-    prev?.addEventListener("click", () => {
-      track?.scrollBy({ left: -scrollAmount(), behavior: "smooth" })
-    })
-    next?.addEventListener("click", () => {
-      track?.scrollBy({ left: scrollAmount(), behavior: "smooth" })
-    })
-    track?.addEventListener("scroll", syncCarouselNav, { passive: true })
+    const sig = { signal: this._fishPickAbort.signal }
+    prev?.addEventListener(
+      "click",
+      () => {
+        track?.scrollBy({ left: -scrollAmount(), behavior: "smooth" })
+      },
+      sig
+    )
+    next?.addEventListener(
+      "click",
+      () => {
+        track?.scrollBy({ left: scrollAmount(), behavior: "smooth" })
+      },
+      sig
+    )
+    track?.addEventListener("scroll", syncCarouselNav, { passive: true, signal: this._fishPickAbort.signal })
     requestAnimationFrame(syncCarouselNav)
 
     const applyFishSelection = (fishId) => {
-      const id = Number(fishId)
-      if (!Number.isFinite(id)) return
+      const sid = String(fishId).trim()
+      if (!sid) return
 
       root.classList.add("lake-fiche-popup--lures-revealed")
 
-      root.querySelectorAll(".lake-fiche-popup__fish-btn").forEach((b) => {
-        const active = Number(b.dataset.fishId) === id
-        b.classList.toggle("is-active", active)
+      root.querySelectorAll(".lake-panel__fish-card[data-fish-id]").forEach((b) => {
+        const active = String(b.dataset.fishId) === sid
+        b.classList.toggle("lake-panel__fish-card--selected", active)
         b.setAttribute("aria-pressed", String(active))
       })
-      root.querySelectorAll(".lake-fiche-popup__lure-panel").forEach((panel) => {
-        const match = Number(panel.dataset.fishPanel) === id
-        panel.classList.toggle("is-active", match)
-        panel.setAttribute("aria-hidden", String(!match))
-      })
 
-      const fs = (lake.fish_species || []).find((s) => Number(s.id) === id)
-      if (headingEl && fs) headingEl.textContent = `Leurres pour ${fs.name}`
-      if (traitsEl) {
-        const full = this.lakeCharacteristicsBlurbForFish(lake, id)
+      const fs = (lake.fish_species || []).find((s) => String(s.id) === sid)
+      const slot = root.querySelector("[data-lures-grid-slot]")
+      if (slot) {
+        slot.removeAttribute("hidden")
+        slot.innerHTML = this.lurePanelListHtml(fs?.lures)
+      }
+      if (headingEl && fs) headingEl.textContent = `Leurres — ${fs.name}`
+      const idNum = Number(sid)
+      if (traitsEl && Number.isFinite(idNum)) {
+        const full = this.lakeCharacteristicsBlurbForFish(lake, idNum)
         traitsEl.textContent = full.length > 380 ? `${full.slice(0, 377).trim()}…` : full
       }
 
@@ -491,20 +514,30 @@ export default class extends Controller {
         this._popup?.update?.()
         this.applyFichePopupLayoutLock()
         syncCarouselNav()
+        slot?.scrollIntoView?.({ block: "nearest", behavior: "smooth" })
       })
     }
 
-    root.addEventListener(
-      "click",
-      (ev) => {
-        const btn = ev.target.closest(".lake-fiche-popup__fish-btn")
-        if (!btn || !root.contains(btn)) return
-        ev.preventDefault()
-        ev.stopPropagation()
-        applyFishSelection(btn.getAttribute("data-fish-id"))
-      },
-      { signal: this._fishPickAbort.signal }
-    )
+    /* Délégation en phase capture : le clic atteint le poisson avant d’être absorbé par la carte / Leaflet. */
+    const onFishPickClick = (ev) => {
+      if (ev.type === "click" && ev.button !== 0) return
+      const btn = ev.target.closest(".lake-panel__fish-card[data-fish-id]")
+      if (!btn || !root.contains(btn)) return
+      ev.preventDefault()
+      ev.stopPropagation()
+      applyFishSelection(btn.getAttribute("data-fish-id"))
+    }
+    root.addEventListener("click", onFishPickClick, { capture: true, signal: sig })
+
+    const onFishPickKey = (ev) => {
+      if (ev.key !== "Enter" && ev.key !== " ") return
+      const btn = ev.target.closest(".lake-panel__fish-card[data-fish-id]")
+      if (!btn || !root.contains(btn)) return
+      if (ev.key === " ") ev.preventDefault()
+      ev.stopPropagation()
+      applyFishSelection(btn.getAttribute("data-fish-id"))
+    }
+    root.addEventListener("keydown", onFishPickKey, { capture: true, signal: sig })
   }
 
   scrollLakeDetailsIntoView() {
@@ -684,10 +717,15 @@ export default class extends Controller {
     this.lakeDescriptionTarget.textContent = lake.description || "—"
     this.lakeLocationTarget.textContent = lake.location_label || "—"
 
+    this.hideFishLuresPanel()
+
     this.fishListTarget.innerHTML = ""
     ;(lake.fish_species || []).forEach((fs) => {
-      const card = document.createElement("div")
+      const card = document.createElement("button")
+      card.type = "button"
       card.className = "lake-panel__fish-card"
+      card.dataset.fishId = String(fs.id)
+      card.setAttribute("aria-pressed", "false")
       const fishSrc = this.fishSpeciesImageUrl(fs)
       card.innerHTML = `
         <div class="lake-panel__fish-thumb">
@@ -698,24 +736,52 @@ export default class extends Controller {
       this.fishListTarget.appendChild(card)
     })
 
+    if (this.hasChatLinkTarget) {
+      this.chatLinkTarget.href = this.chatUrlFormatValue.replace("%{id}", String(lake.id))
+      this.chatLinkTarget.classList.remove("d-none") // 👈 affiche le bouton
+    }
+
+    this.scrollLakeDetailsIntoView()
+  }
+
+  hideFishLuresPanel() {
+    if (this.hasFishLuresSectionTarget) this.fishLuresSectionTarget.classList.add("d-none")
+    if (this.hasFishLuresHeadingTarget) this.fishLuresHeadingTarget.textContent = "Leurres"
+    if (this.hasLuresListTarget) this.luresListTarget.innerHTML = ""
+    if (this.hasFishListTarget) {
+      this.fishListTarget.querySelectorAll(".lake-panel__fish-card").forEach((el) => {
+        el.classList.remove("lake-panel__fish-card--selected")
+        el.setAttribute("aria-pressed", "false")
+      })
+    }
+  }
+
+  /** @param {string} fishSpeciesId */
+  showLuresPanelForFishSpecies(fishSpeciesId) {
+    const lake = this.lakes.find((l) => l.id === this.selectedId)
+    if (!lake || !this.hasFishLuresSectionTarget || !this.hasLuresListTarget || !this.hasFishLuresHeadingTarget)
+      return
+
+    const sid = String(fishSpeciesId)
+    const fs = (lake.fish_species || []).find((s) => String(s.id) === sid)
+    if (!fs) return
+
+    this.fishListTarget.querySelectorAll(".lake-panel__fish-card").forEach((el) => {
+      const active = el.dataset.fishId === sid
+      el.classList.toggle("lake-panel__fish-card--selected", active)
+      el.setAttribute("aria-pressed", active ? "true" : "false")
+    })
+
+    this.fishLuresHeadingTarget.textContent = `Leurres — ${fs.name}`
     this.luresListTarget.innerHTML = ""
-    const species = lake.fish_species || []
-    let anyLure = false
-    species.forEach((fs) => {
-      const lures = fs.lures || []
-      if (lures.length === 0) return
-      anyLure = true
-      const head = document.createElement("li")
-      head.className =
-        "list-group-item lake-panel__species-head bg-light py-2 small fw-semibold text-uppercase text-muted border-0"
-      const speciesImg = this.fishSpeciesImageUrl(fs)
-      head.innerHTML = `
-        <span class="lake-panel__species-head-inner">
-          <span class="lake-panel__species-head-thumb"><img src="${speciesImg}" alt="" width="28" height="28" loading="lazy" decoding="async" /></span>
-          <span>${this.escapeHtml(fs.name)}</span>
-        </span>
-      `
-      this.luresListTarget.appendChild(head)
+
+    const lures = fs.lures || []
+    if (lures.length === 0) {
+      const li = document.createElement("li")
+      li.className = "list-group-item text-muted"
+      li.textContent = "Aucun leurre recommandé pour cette espèce."
+      this.luresListTarget.appendChild(li)
+    } else {
       lures.forEach((lure) => {
         const li = document.createElement("li")
         li.className = "list-group-item lure-item lake-panel__lure-item py-2"
@@ -733,24 +799,29 @@ export default class extends Controller {
         `
         this.luresListTarget.appendChild(li)
       })
-    })
-    if (!anyLure) {
-      const li = document.createElement("li")
-      li.className = "list-group-item text-muted"
-      li.textContent = "Aucun leurre recommandé pour l’instant."
-      this.luresListTarget.appendChild(li)
     }
 
-    if (this.hasChatLinkTarget) {
-      this.chatLinkTarget.href = this.chatUrlFormatValue.replace("%{id}", String(lake.id))
-      this.chatLinkTarget.classList.remove("d-none") // 👈 affiche le bouton
-    }
+    this.fishLuresSectionTarget.classList.remove("d-none")
+  }
 
-    this.scrollLakeDetailsIntoView()
+  _handleFishCardActivation(e) {
+    if (e.type === "click" && e.button !== 0) return
+    if (e.type === "keydown") {
+      if (e.key !== "Enter" && e.key !== " ") return
+      if (e.key === " ") e.preventDefault()
+    }
+    const t = e.target
+    if (!(t instanceof Element)) return
+    const card = t.closest(".lake-panel__fish-card")
+    if (!card || !this.detailsTarget.contains(card)) return
+    const fishId = card.dataset.fishId
+    if (!fishId) return
+    this.showLuresPanelForFishSpecies(fishId)
   }
 
   resetDetails() {
     this.selectedId = null
+    this.hideFishLuresPanel()
     this.emptyStateTarget.classList.remove("d-none")
     this.detailsTarget.classList.add("d-none")
     this.updateMarkerHighlighting()
@@ -900,32 +971,32 @@ export default class extends Controller {
     return parts.join(" ")
   }
 
-  lureCellsHtml(lures) {
+  /** Liste leurres (même marqueur que le panneau droit : `ul` + lignes bordure bleue). */
+  lurePanelListHtml(lures) {
     const list = lures || []
     if (!list.length) {
-      return `<p class="lake-fiche-popup__empty">Aucun leurre pour cette espèce.</p>`
+      return `<ul class="list-group list-group-flush small lake-panel__lures-list lake-fiche-popup__lures-list"><li class="list-group-item text-muted">Aucun leurre recommandé pour cette espèce.</li></ul>`
     }
-    return list
+    const items = list
       .map((lure) => {
-        const img = this.lureImageUrl(lure.name)
-        const raw = String(lure.description || "").trim()
-        const desc =
-          raw.length > 48 ? `${this.escapeHtml(raw.slice(0, 45))}…` : this.escapeHtml(raw)
-        const descHtml = raw
-          ? `<span class="lake-fiche-popup__lure-chip__desc">${desc}</span>`
-          : ""
-        return `<article class="lake-fiche-popup__lure-chip" title="${this.escapeHtml(lure.name)}">
-            <div class="lake-fiche-popup__lure-chip__media lake-fiche-popup__img-wrap lake-fiche-popup__img-wrap--lure lake-fiche-popup__img-wrap--cutout">
-              <img src="${img}" alt="" width="36" height="36" loading="lazy" decoding="async" role="presentation" />
+        const lureSrc = this.lureImageUrl(lure.name)
+        return `<li class="list-group-item lure-item lake-panel__lure-item py-2">
+          <div class="lake-panel__lure-row">
+            <div class="lake-panel__lure-thumb">
+              <img src="${lureSrc}" alt="" width="40" height="40" loading="lazy" decoding="async" />
             </div>
-            <span class="lake-fiche-popup__lure-chip__name">${this.escapeHtml(lure.name)}</span>
-            ${descHtml}
-          </article>`
+            <div class="lake-panel__lure-body">
+              <div class="fw-semibold">${this.escapeHtml(lure.name)}</div>
+              <div class="small text-muted">${this.escapeHtml(lure.description || "")}</div>
+            </div>
+          </div>
+        </li>`
       })
       .join("")
+    return `<ul class="list-group list-group-flush small lake-panel__lures-list lake-fiche-popup__lures-list">${items}</ul>`
   }
 
-  /** Fiche lac : carousel poissons, leurres par espèce (clic), caractéristiques dynamiques. */
+  /** Fiche lac : poissons + leurres (même présentation que le panneau droit), conseils dynamiques. */
   markerPopupHtml(lake) {
     const species = lake.fish_species || []
     const rawDesc = String(lake.description || "").trim()
@@ -950,45 +1021,21 @@ export default class extends Controller {
 
     const lureHeading = this.escapeHtml("Leurres recommandés")
 
-    const carouselChevronLeft = `<svg class="lake-fiche-popup__carousel-ico" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M15.41 16.59 10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>`
-    const carouselChevronRight = `<svg class="lake-fiche-popup__carousel-ico" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M8.59 16.59 13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>`
-
     const fishCarousel = species.length
-      ? `<div class="lake-fiche-popup__carousel" style="display:flex;flex-flow:row nowrap;align-items:center;gap:0.25rem;width:100%;min-width:0" role="group" aria-label="Poissons disponibles">
-          <button type="button" class="lake-fiche-popup__carousel-btn lake-fiche-popup__carousel-btn--prev" aria-label="Faire défiler les poissons vers la gauche">
-            ${carouselChevronLeft}
-          </button>
-          <div class="lake-fiche-popup__carousel-viewport">
-            <div class="lake-fiche-popup__carousel-track">
+      ? `<div class="lake-panel__fish-grid lake-fiche-popup__fish-grid" role="group" aria-label="Poissons disponibles">
               ${species
                 .map((fs) => {
                   const img = this.fishSpeciesImageUrl(fs)
-                  return `<button type="button" class="lake-fiche-popup__fish-btn lake-fiche-popup__fish-chip" data-fish-id="${fs.id}" aria-pressed="false" aria-label="Afficher les leurres pour ${this.escapeHtml(fs.name)}">
-              <div class="lake-fiche-popup__fish-chip__media lake-fiche-popup__img-wrap lake-fiche-popup__img-wrap--fish lake-fiche-popup__img-wrap--cutout">
-                <img src="${img}" alt="" width="44" height="44" loading="lazy" decoding="async" role="presentation" />
+                  return `<button type="button" class="lake-panel__fish-card lake-fiche-popup__fish-pick" data-fish-id="${fs.id}" aria-pressed="false" aria-label="Afficher les leurres pour ${this.escapeHtml(fs.name)}">
+              <div class="lake-panel__fish-thumb">
+                <img src="${img}" alt="" width="48" height="48" loading="lazy" decoding="async" />
               </div>
-              <span class="lake-fiche-popup__fish-chip__name">${this.escapeHtml(fs.name)}</span>
+              <span class="lake-panel__fish-name">${this.escapeHtml(fs.name)}</span>
             </button>`
                 })
                 .join("")}
-            </div>
-          </div>
-          <button type="button" class="lake-fiche-popup__carousel-btn lake-fiche-popup__carousel-btn--next" aria-label="Faire défiler les poissons vers la droite">
-            ${carouselChevronRight}
-          </button>
         </div>`
       : `<p class="lake-fiche-popup__empty">Aucun poisson renseigné.</p>`
-
-    const lurePanels =
-      species.length > 0
-        ? species
-            .map((fs) => {
-              return `<div class="lake-fiche-popup__lure-panel" data-fish-panel="${fs.id}" role="tabpanel" aria-hidden="true">
-          <div class="lake-fiche-popup__row lake-fiche-popup__row--lures">${this.lureCellsHtml(fs.lures)}</div>
-        </div>`
-            })
-            .join("")
-        : `<p class="lake-fiche-popup__empty">Aucune espèce : les leurres par poisson ne sont pas disponibles.</p>`
 
     const traitsIntro = this.escapeHtml(
       "Sélectionnez un poisson ci-dessus pour afficher ses leurres recommandés et un descriptif adapté."
@@ -996,12 +1043,20 @@ export default class extends Controller {
 
     const luresSectionBody =
       species.length > 0
-        ? `<div class="lake-fiche-popup__lures-callout" data-lures-hint role="note">
-            <span class="lake-fiche-popup__lures-callout__icon" aria-hidden="true">👆</span>
-            <span class="lake-fiche-popup__lures-callout__text">Cliquez sur une espèce ci-dessus pour afficher ses leurres.</span>
+        ? `<div class="lake-panel__lures-section lake-fiche-popup__panel-lures">
+          <h4 class="lake-panel__section-title">
+            <span class="lake-panel__section-title-icon" aria-hidden="true">🎣</span>
+            <span data-lures-heading>${lureHeading}</span>
+          </h4>
+          <div class="lake-fiche-popup__lures-below-title">
+            <div class="lake-fiche-popup__lures-callout" data-lures-hint role="note">
+              <span class="lake-fiche-popup__lures-callout__icon" aria-hidden="true">👆</span>
+              <span class="lake-fiche-popup__lures-callout__text">Cliquez sur une espèce ci-dessus pour afficher ses leurres.</span>
+            </div>
+            <div class="lake-fiche-popup__lures-dynamic" data-lures-grid-slot hidden></div>
           </div>
-        <div class="lake-fiche-popup__lure-panels" data-lure-panels>${lurePanels}</div>`
-        : lurePanels
+        </div>`
+        : `<p class="lake-fiche-popup__empty">Aucune espèce : les leurres par poisson ne sont pas disponibles.</p>`
 
     return `<div class="lake-fiche-popup lake-fiche-popup--profile" role="region" aria-label="Fiche lac">
       <div class="lake-fiche-popup__top">
@@ -1035,13 +1090,15 @@ export default class extends Controller {
             </div>
           </div>
         </div>
-        <section class="lake-fiche-popup__section lake-fiche-popup__section--fish lake-fiche-popup__section--profile" aria-label="Poissons disponibles">
-          <h4 class="lake-fiche-popup__h lake-fiche-popup__h--profile">Poissons disponibles</h4>
-          <p class="lake-fiche-popup__fish-hint lake-fiche-popup__fish-hint--profile">Cliquez sur une espèce pour afficher ses leurres.</p>
+        <section class="lake-fiche-popup__section lake-fiche-popup__section--fish lake-fiche-popup__section--profile lake-fiche-popup__section--fish-panel" aria-label="Poissons disponibles">
+          <h4 class="lake-panel__section-title lake-fiche-popup__fish-section-title">
+            <span class="lake-panel__section-title-icon" aria-hidden="true">🐟</span>
+            <span>Poissons</span>
+          </h4>
+          <p class="small text-muted mb-2 lake-panel__fish-hint">Sélectionnez un poisson pour afficher les leurres recommandés.</p>
           ${fishCarousel}
         </section>
-        <section class="lake-fiche-popup__section lake-fiche-popup__section--lures lake-fiche-popup__section--profile" aria-label="Leurres pour l’espèce sélectionnée">
-          <h4 class="lake-fiche-popup__h lake-fiche-popup__h--profile lake-fiche-popup__h--dynamic"><span data-lures-heading>${lureHeading}</span></h4>
+        <section class="lake-fiche-popup__section lake-fiche-popup__section--lures lake-fiche-popup__section--profile lake-fiche-popup__section--lures-panel" aria-label="Leurres pour l’espèce sélectionnée">
           ${luresSectionBody}
         </section>
         <section class="lake-fiche-popup__section lake-fiche-popup__section--traits lake-fiche-popup__section--profile" aria-label="Conseils">
