@@ -1037,7 +1037,7 @@ body.d-flex.flex-column.min-vh-100 > main.flex-grow-1 {
   /* Le contenu reste dans la carte : pas de débordement sous la carte. */
   overflow: hidden;
   /* SassC : ne pas utiliser min() nu — il est interprété comme fonction Sass (vh vs px). */
-  max-height: #{"min(52vh, 520px)"};
+
 
   @media (min-width: 992px) {
     flex: 0 0 420px;
